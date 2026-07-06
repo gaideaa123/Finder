@@ -16,7 +16,8 @@ from finder import find_creators, load_config, save_csv
 app = Flask(__name__)
 
 
-DEFAULT_TEMPLATE = (
+# Türk creator'lara gidecek varsayılan Türkçe şablon.
+DEFAULT_TEMPLATE_TR = (
     "Selam {name} \U0001F44B\n\n"
     "16 ya\u015f\u0131nday\u0131m ve muhtemelen senin de ya\u015fad\u0131\u011f\u0131n bir "
     "\u015feyden b\u0131kt\u0131\u011f\u0131m i\u00e7in bunu yapt\u0131m: video haz\u0131r, montaj "
@@ -30,6 +31,23 @@ DEFAULT_TEMPLATE = (
     "Senden tek istedi\u011fim: bir dene, ger\u00e7ekten i\u015fine yarad\u0131 m\u0131 yaramad\u0131 m\u0131 "
     "bana s\u00f6yle. \u0130yisiyle k\u00f6t\u00fcs\u00fcyle d\u00fcr\u00fcst ol, \u00e7\u00fcnk\u00fc bunu sizin gibi "
     "insanlar i\u00e7in daha iyi yapmak istiyorum.\n\n"
+    "Link: thecaptionai.com \U0001F680"
+)
+
+# Yabancı creator'lara gidecek varsayılan İngilizce şablon.
+DEFAULT_TEMPLATE_EN = (
+    "Hey {name} \U0001F44B\n\n"
+    "I'm 16 and I built this because of something you've probably felt too: the "
+    "video's ready, the edit's done, you're about to post... and then you get "
+    "stuck on the caption for 20 minutes. You end up typing something generic "
+    "and moving on. How many videos never got the views they deserved because "
+    "of a weak caption?\n\n"
+    "So I sat down and coded a tool by myself: CaptionAI. You type your topic "
+    "and in 3 seconds it gives you 4 captions written with a viral formula, "
+    "strong hook, hashtags ready. No wrestling with a blank ChatGPT box, you "
+    "just grab the one that works.\n\n"
+    "All I'm asking: give it a try and tell me if it actually helped or not. Be "
+    "honest, good or bad, because I want to make it better for people like you.\n\n"
     "Link: thecaptionai.com \U0001F680"
 )
 
@@ -51,7 +69,12 @@ def index():
         cfg = load_config()
     except Exception:
         cfg = {}
-    return render_template("index.html", default_template=DEFAULT_TEMPLATE, cfg=cfg)
+    return render_template(
+        "index.html",
+        default_template_tr=DEFAULT_TEMPLATE_TR,
+        default_template_en=DEFAULT_TEMPLATE_EN,
+        cfg=cfg,
+    )
 
 
 @app.route("/api/search", methods=["POST"])
@@ -67,19 +90,24 @@ def api_search():
         "apify_token": data.get("apify_token") or base.get("apify_token", ""),
         "apify_actor": data.get("apify_actor") or base.get("apify_actor", "paxiq~tiktok-influencer-scraper"),
         "hashtags": data.get("hashtags") or base.get("hashtags", []),
+        "countries": data.get("countries") or base.get("countries", []),
         "min_followers": data.get("min_followers", base.get("min_followers", 5000)),
         "max_followers": data.get("max_followers", base.get("max_followers", 50000)),
         "target_count": data.get("target_count", base.get("target_count", 100)),
     }
-    template = data.get("template") or DEFAULT_TEMPLATE
+
+    template_tr = data.get("template_tr") or DEFAULT_TEMPLATE_TR
+    template_en = data.get("template_en") or DEFAULT_TEMPLATE_EN
 
     try:
         rows = find_creators(cfg)
     except Exception as e:  # noqa: BLE001
         return jsonify({"ok": False, "error": str(e)}), 400
 
+    # Her creator icin diline gore sablon sec (tr -> Turkce, digerleri -> Ingilizce)
     for r in rows:
-        r["message"] = personalize(template, r)
+        tpl = template_tr if r.get("lang") == "tr" else template_en
+        r["message"] = personalize(tpl, r)
 
     try:
         save_csv(rows, base.get("output_csv", "creators.csv"))
