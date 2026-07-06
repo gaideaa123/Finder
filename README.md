@@ -1,30 +1,33 @@
 # CaptionAI İçerik Üretici Bulucu 🔎
 
-TikTok'ta hashtag'lerden içerik üreticisi bulur, takipçi bandı + etkileşim
-oranına göre filtreler ve **her biri için kişiye özel DM'i hazır** verir.
-Şık bir web arayüzünde: tek tıkla kopyala + profile git.
+TikTok'ta hashtag'lerden içerik üreticisi bulur, takipçi bandına göre filtreler
+ve **her biri için kişiye özel DM'i hazır** verir. Şık web arayüzünde: tek tıkla
+kopyala + profile git.
 
-> Neden e-posta değil? Creator'lara izinsiz toplu soğuk mail atmak KVKK/GDPR'a
-> aykırı ve domain'ini spam'e düşürür. DM hem yasal hem 10 kat daha etkili.
+## Neden Apify?
+
+TikTok, doğrudan kazımayı bilerek engelliyor: `msToken` saniyede değişiyor,
+Playwright kırılıyor. Bu yüzden **Apify** kullanıyoruz: TikTok'un anti-bot
+savaşını (proxy, fingerprint, token) onlar veriyor. Sen sadece **sabit bir API
+token'ı** alıyorsun (bir kere kopyala, hep çalışır) ve hashtag veriyorsun.
+
+Artı: kurulumda `Playwright`/`greenlet`/C++ derleyici derdi **yok**. Sadece
+`requests` + `Flask`, Python 3.14'te bile sorunsuz kurulur.
 
 ## Kurulum
 
 ```bash
 pip install -r requirements.txt
-python -m playwright install chromium
 ```
 
-## msToken nasıl alınır (tek seferlik)
+Hepsi bu. Native derleme yok.
 
-TikTok'un web'i imzalı bir `msToken` çerezi ister. Almak için:
+## Apify API token nasıl alınır (tek seferlik, ücretsiz)
 
-1. Tarayıcıda [tiktok.com](https://www.tiktok.com)'a gir (gerekirse giriş yap).
-2. `F12` ile geliştirici araçlarını aç.
-3. **Application** (Uygulama) sekmesi → sol menüde **Cookies** → `https://www.tiktok.com`.
-4. Listede **`msToken`** satırını bul, değerini kopyala.
-5. Web arayüzünde "msToken" alanına yapıştır (veya `config.json`'a).
-
-> msToken zamanla geçersiz olur; çalışmazsa yeni bir tane al.
+1. [apify.com](https://apify.com)'a ücretsiz kayıt ol (aylık ücretsiz kredi veriyor).
+2. [console.apify.com/account/integrations](https://console.apify.com/account/integrations) → **Personal API tokens**.
+3. Token'ı kopyala (`apify_api_...` ile başlar). Bu değer sabittir, msToken gibi değişmez.
+4. Web arayüzündeki "Apify API Token" alanına yapıştır (veya `config.json`'a).
 
 ## Kullanım — Web Arayüzü (önerilen) 🖥️
 
@@ -32,49 +35,45 @@ TikTok'un web'i imzalı bir `msToken` çerezi ister. Almak için:
 python app.py
 ```
 
-Sonra tarayıcıda aç: **http://127.0.0.1:5000**
+Tarayıcıda aç: **http://127.0.0.1:5000**
 
-Arayüzde:
-- Soldan hashtag'leri, takipçi bandını, etkileşim eşiğini ve msToken'ı gir.
-- DM şablonunu düzenle (`{name}` her creator'ın adıyla otomatik dolar).
+- Apify token'ını, hashtag'leri ve takipçi bandını gir.
+- DM şablonunu düzenle (`{name}` ve `{bio}` her creator için otomatik dolar).
 - **Üreticileri Bul**'a bas.
-- Sağda her creator bir kart olur: adı, takipçi, etkileşim, **kişiye özel DM**,
-  **📋 Kopyala** ve **👤 Profile Git** butonları.
-- İstersen tüm listeyi **CSV İndir** ile dışa aktar.
+- Sağda her creator bir kart: adı, takipçi, **kişiye özel DM**, **📋 Kopyala** ve
+  **👤 Profile Git** butonları.
+- **CSV İndir** ile tüm listeyi dışa aktar.
 
 ## Kullanım — Terminal (alternatif)
 
-`config.example.json`'u `config.json` yap, düzenle, sonra:
+`config.example.json`'u `config.json` yap, `apify_token` ve hashtag'leri gir, sonra:
 
 ```bash
 python finder.py
 ```
 
-Çıktı: `creators.csv` (`username, nickname, followers, engagement_rate, profile, hashtag`).
+Çıktı: `creators.csv`.
 
-## Ayarlar (`config.json`)
+## Ayarlar
 
 | Alan | Ne işe yarar |
 | --- | --- |
-| `hashtags` | Taranacak hashtag listesi (niş'ine göre değiştir) |
-| `videos_per_hashtag` | Hashtag başına çekilecek video sayısı |
-| `min_followers` / `max_followers` | Takipçi bandı (varsayılan 5K-50K: mikro-influencer) |
-| `min_engagement_rate` | Min. etkileşim oranı, (beğeni+yorum)/takipçi (0.05 = %5) |
-| `target_count` | Kaç üretici bulununca duracağı (varsayılan 100) |
-| `output_csv` | Çıktı dosyası adı |
+| `apify_token` | Apify API token (zorunlu) |
+| `apify_actor` | Kullanılacak Apify actor'ı (varsayılan `paxiq~tiktok-influencer-scraper`) |
+| `hashtags` | Taranacak hashtag listesi |
+| `min_followers` / `max_followers` | Takipçi bandı (varsayılan 5K-50K) |
+| `target_count` | Kaç üretici bulununca duracağı |
 
-## Niş hashtag fikirleri
+## Farklı actor kullanmak
 
-- **Yemek:** yemektarifi, evyemekleri, foodtiktok, tarifpaylasimi
-- **Fitness:** spormotivasyon, gymtok, antrenman, fitlife
-- **Moda:** kombin, outfitinspo, modaonerisi, stiltavsiyesi
-- **Seyahat:** gezilecekyerler, seyahatvloggu, traveltr
-- **Eğitim:** bilgipaylasimi, ogrenmekeyifli, dijitalpazarlama
+Varsayılan actor beklediğin sonucu vermezse Apify Store'da başka bir TikTok
+hashtag/influencer actor'ı seçip `apify_actor` alanına `kullanici~actor-adi`
+formatında yaz. `finder.py` içindeki normalize_item farklı alan isimlerini
+(username/handle/uniqueId, followers/followerCount/fans...) otomatik çözer.
+Gerekirse `config.json`'a `apify_input` ekleyip actor'a özel girdi verebilirsin.
 
 ## Uyarılar
 
-- Bu araç TikTok'un web arayüzünü otomatize eder; TikTok yapısını değiştirirse
-  güncelleme gerekebilir. Çalışmazsa önce `msToken`'ı yenile.
-- Hesabını korumak için makul sayıda veri çek, aşırıya kaçma.
-- Topladığın verileri sadece kişisel, kişiye özel DM için kullan, toplu spam'e
-  dönüştürme.
+- Apify ücretsiz kredisi bitince küçük bir ücret alır; kullanımdan önce
+  actor'ın fiyatına bak (genelde 1000 sonuç birkaç dolar).
+- Topladığın verileri sadece kişiye özel DM için kullan, toplu spam'e çevirme.
