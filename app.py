@@ -1,14 +1,12 @@
 """
-CaptionAI İçerik Üretici Bulucu - Web GUI sunucusu
-==================================================
+CaptionAI İçerik Üretici Bulucu - Web GUI sunucusu (Apify tabanlı)
+=================================================================
 
 Calistir:
     python app.py
 Sonra tarayicida ac: http://127.0.0.1:5000
 """
 
-import asyncio
-import json
 import os
 
 from flask import Flask, jsonify, render_template, request
@@ -37,56 +35,52 @@ DEFAULT_TEMPLATE = (
 
 
 def personalize(template: str, record: dict) -> str:
-    """{name}/{username} yer tutucularini kisiye ozel doldur."""
+    """{name}/{username}/{bio} yer tutucularini kisiye ozel doldur."""
     name = record.get("nickname") or record.get("username", "")
-    return template.replace("{name}", name).replace("{username}", record.get("username", ""))
+    return (
+        template
+        .replace("{name}", name)
+        .replace("{username}", record.get("username", ""))
+        .replace("{bio}", record.get("bio", ""))
+    )
 
 
 @app.route("/")
 def index():
-    # Kayitli config varsa GUI'ye on-doldur (ms_token haric guvenli alanlar).
     try:
         cfg = load_config()
     except Exception:
         cfg = {}
-    return render_template(
-        "index.html",
-        default_template=DEFAULT_TEMPLATE,
-        cfg=cfg,
-    )
+    return render_template("index.html", default_template=DEFAULT_TEMPLATE, cfg=cfg)
 
 
 @app.route("/api/search", methods=["POST"])
 def api_search():
     data = request.get_json(force=True) or {}
 
-    # GUI'den gelen ayarlar; bos gelirse config.json'dan tamamla.
     try:
         base = load_config()
     except Exception:
         base = {}
 
     cfg = {
+        "apify_token": data.get("apify_token") or base.get("apify_token", ""),
+        "apify_actor": data.get("apify_actor") or base.get("apify_actor", "paxiq~tiktok-influencer-scraper"),
         "hashtags": data.get("hashtags") or base.get("hashtags", []),
-        "videos_per_hashtag": data.get("videos_per_hashtag", base.get("videos_per_hashtag", 60)),
         "min_followers": data.get("min_followers", base.get("min_followers", 5000)),
         "max_followers": data.get("max_followers", base.get("max_followers", 50000)),
-        "min_engagement_rate": data.get("min_engagement_rate", base.get("min_engagement_rate", 0.05)),
         "target_count": data.get("target_count", base.get("target_count", 100)),
-        "ms_token": data.get("ms_token") or base.get("ms_token", ""),
     }
     template = data.get("template") or DEFAULT_TEMPLATE
 
     try:
-        rows = asyncio.run(find_creators(cfg))
+        rows = find_creators(cfg)
     except Exception as e:  # noqa: BLE001
         return jsonify({"ok": False, "error": str(e)}), 400
 
-    # Her uretici icin kisiye ozel DM ekle
     for r in rows:
         r["message"] = personalize(template, r)
 
-    # CSV'ye de kaydet (mesaj haric temel alanlar)
     try:
         save_csv(rows, base.get("output_csv", "creators.csv"))
     except Exception:
