@@ -1,22 +1,24 @@
 """
-CaptionAI - İçerik Üretici Bulucu (TikTok) - çekirdek mantık
-===========================================================
+CaptionAI - İçerik Üretici Bulucu (Apify tabanlı)
+=================================================
 
-Hem CLI (python finder.py) hem de web GUI (app.py) bu dosyayı kullanır.
-Ana fonksiyon: find_creators(cfg, on_progress) -> list[dict]
+Neden Apify? TikTok'un kendi kazımayı engelleme sistemi (msToken saniyede
+değişiyor, Playwright kırılıyor) yüzünden doğrudan kazıma güvenilmez. Apify
+bu savaşı bizim yerimize veriyor: sabit bir API token'ı ile hashtag'den
+creator listesi çekiyoruz. Native derleme (C++/greenlet) gerektirmez.
+
+Hem CLI (python finder.py) hem web GUI (app.py) bu dosyayı kullanır.
+Ana fonksiyon: find_creators(cfg) -> list[dict]
 """
 
-import asyncio
-import csv
 import json
 import os
-import sys
-from typing import Callable, Dict, List, Optional
+import time
+from typing import Dict, List, Optional
 
-try:
-    from TikTokApi import TikTokApi
-except ImportError:
-    TikTokApi = None  # app.py kendi hata mesajını gösterir
+import requests
+
+APIFY_BASE = "https://api.apify.com/v2"
 
 
 def load_config(path: Optional[str] = None) -> dict:
@@ -26,133 +28,153 @@ def load_config(path: Optional[str] = None) -> dict:
         return json.load(f)
 
 
-def engagement_rate(stats: Dict, followers: int) -> float:
-    """Basit etkileşim oranı: (begeni + yorum) / takipci."""
-    if not followers:
-        return 0.0
-    likes = stats.get("diggCount", 0) or 0
-    comments = stats.get("commentCount", 0) or 0
-    return (likes + comments) / followers
+# --- Esnek alan çözümleyiciler ------------------------------------------
+# Farklı Apify actor'ları farklı alan isimleri döndürür. Hepsini tek bir
+# normalize edilmiş kayıta indirger.
+
+def _first(d: dict, keys: List[str], default=None):
+    for k in keys:
+        if k in d and d[k] not in (None, ""):
+            return d[k]
+        # nested: authorMeta.name gibi
+        if "." in k:
+            cur = d
+            ok = True
+            for part in k.split("."):
+                if isinstance(cur, dict) and part in cur:
+                    cur = cur[part]
+                else:
+                    ok = False
+                    break
+            if ok and cur not in (None, ""):
+                return cur
+    return default
 
 
-async def find_creators(
-    cfg: dict,
-    on_progress: Optional[Callable[[dict], None]] = None,
-) -> List[dict]:
+def normalize_item(item: dict) -> Optional[dict]:
+    """Bir Apify sonucunu {username, nickname, followers, bio, profile} yap."""
+    username = _first(
+        item,
+        ["username", "handle", "uniqueId", "authorMeta.name", "author.uniqueId", "userName"],
+    )
+    if not username:
+        return None
+    username = str(username).lstrip("@")
+
+    nickname = _first(
+        item,
+        ["nickname", "name", "fullName", "authorMeta.nickName", "author.nickname", "displayName"],
+        default=username,
+    )
+    followers = _first(
+        item,
+        ["followers", "followerCount", "fans", "authorMeta.fans", "authorStats.followerCount", "followersCount"],
+        default=0,
+    )
+    try:
+        followers = int(followers)
+    except (TypeError, ValueError):
+        followers = 0
+
+    bio = _first(item, ["bio", "signature", "authorMeta.signature", "description"], default="")
+    email = _first(item, ["email", "authorMeta.email"], default="")
+
+    return {
+        "username": username,
+        "nickname": nickname or username,
+        "followers": followers,
+        "bio": bio or "",
+        "email": email or "",
+        "profile": f"https://www.tiktok.com/@{username}",
+    }
+
+
+def find_creators(cfg: dict) -> List[dict]:
     """
-    Hashtag'lerden içerik üreticilerini bulur, filtreler ve liste döner.
-
-    on_progress(callback) her yeni üretici bulunduğunda çağrılır; GUI'de
-    canlı ilerleme göstermek için kullanılır.
+    Apify actor'ını çalıştırıp normalize edilmiş creator listesi döner.
+    Takipçi bandına göre filtreler, hedef sayıda keser, tekrarları atar.
     """
-    if TikTokApi is None:
+    token = cfg.get("apify_token", "")
+    if not token or "YAPISTIR" in token:
         raise RuntimeError(
-            "TikTokApi kurulu degil. Once: pip install -r requirements.txt"
+            "Gecerli bir Apify API token yok. apify.com'dan ucretsiz al ve config'e/GUI'ye yapistir."
         )
 
-    hashtags = cfg["hashtags"]
-    per_tag = int(cfg.get("videos_per_hashtag", 60))
+    actor = cfg.get("apify_actor", "paxiq~tiktok-influencer-scraper")
+    hashtags = [h.lstrip("#") for h in cfg.get("hashtags", []) if h.strip()]
+    if not hashtags:
+        raise RuntimeError("En az bir hashtag gerekli.")
+
     min_f = int(cfg.get("min_followers", 5000))
     max_f = int(cfg.get("max_followers", 50000))
-    min_er = float(cfg.get("min_engagement_rate", 0.05))
     target = int(cfg.get("target_count", 100))
-    ms_token = cfg.get("ms_token", "")
 
-    if not ms_token or "YAPISTIR" in ms_token:
+    # Actor input'u. paxiq/tiktok-influencer-scraper bu alanları kullanır;
+    # başka actor seçilirse config.apify_input ile override edilebilir.
+    actor_input = cfg.get("apify_input") or {
+        "hashtags": hashtags,
+        "minFollowers": min_f,
+        "maxFollowers": max_f,
+        "maxItems": target * 2,  # filtreden sonra hedefe ulaşmak için fazladan çek
+    }
+
+    # Actor'ı senkron çalıştır ve dataset item'larını al (tek çağrı).
+    url = f"{APIFY_BASE}/acts/{actor}/run-sync-get-dataset-items"
+    resp = requests.post(
+        url,
+        params={"token": token},
+        json=actor_input,
+        timeout=600,
+    )
+
+    if resp.status_code >= 400:
         raise RuntimeError(
-            "Gecerli bir ms_token yok. README'deki adimlarla tarayicidan al ve config'e yapistir."
+            f"Apify hatasi ({resp.status_code}): {resp.text[:300]}"
         )
 
-    found: Dict[str, dict] = {}
+    items = resp.json()
+    if not isinstance(items, list):
+        items = items.get("items", []) if isinstance(items, dict) else []
 
-    async with TikTokApi() as api:
-        await api.create_sessions(
-            ms_tokens=[ms_token],
-            num_sessions=1,
-            sleep_after=3,
-            browser="chromium",
-        )
+    seen: Dict[str, dict] = {}
+    for raw in items:
+        rec = normalize_item(raw)
+        if not rec:
+            continue
+        if rec["username"] in seen:
+            continue
+        # Takipçi bandı filtresi (actor zaten filtrelese de garantiye al)
+        f = rec["followers"]
+        if f and (f < min_f or f > max_f):
+            continue
+        seen[rec["username"]] = rec
+        if len(seen) >= target:
+            break
 
-        for tag_name in hashtags:
-            if len(found) >= target:
-                break
-            try:
-                tag = api.hashtag(name=tag_name)
-                async for video in tag.videos(count=per_tag):
-                    info = video.as_dict
-                    author = info.get("author", {}) or {}
-                    author_stats = info.get("authorStats", {}) or {}
-                    stats = info.get("stats", {}) or {}
-
-                    username = author.get("uniqueId")
-                    if not username or username in found:
-                        continue
-
-                    followers = author_stats.get("followerCount", 0) or 0
-                    if followers < min_f or followers > max_f:
-                        continue
-
-                    er = engagement_rate(stats, followers)
-                    if er < min_er:
-                        continue
-
-                    nickname = author.get("nickname") or username
-                    record = {
-                        "username": username,
-                        "nickname": nickname,
-                        "followers": followers,
-                        "engagement_rate": round(er, 4),
-                        "profile": f"https://www.tiktok.com/@{username}",
-                        "hashtag": tag_name,
-                    }
-                    found[username] = record
-
-                    if on_progress:
-                        on_progress({**record, "count": len(found), "target": target})
-
-                    if len(found) >= target:
-                        break
-            except Exception as e:  # noqa: BLE001
-                if on_progress:
-                    on_progress({"error": f"'{tag_name}' taranirken hata: {e}"})
-                continue
-
-            await asyncio.sleep(2)  # nazik ol: hashtag'ler arasi bekleme
-
-    return sorted(found.values(), key=lambda r: r["engagement_rate"], reverse=True)
+    # Takipçiye göre büyükten küçüğe sırala
+    return sorted(seen.values(), key=lambda r: r["followers"], reverse=True)
 
 
 def save_csv(rows: List[dict], out_csv: str) -> None:
+    import csv
     with open(out_csv, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(
-            f,
-            fieldnames=["username", "nickname", "followers", "engagement_rate", "profile", "hashtag"],
+            f, fieldnames=["username", "nickname", "followers", "email", "bio", "profile"]
         )
         writer.writeheader()
         writer.writerows(rows)
 
 
-async def _cli() -> None:
+def _cli() -> None:
     cfg = load_config()
-
-    def _print(ev: dict) -> None:
-        if "error" in ev:
-            print(f"  ! {ev['error']}")
-        else:
-            print(
-                f"  + @{ev['username']}  ({ev['followers']} takipci, "
-                f"ER {ev['engagement_rate']:.1%})  [{ev['count']}/{ev['target']}]"
-            )
-
-    print("Taraniyor...")
-    rows = await find_creators(cfg, on_progress=_print)
+    print("Apify uzerinden araniyor... (birkac dakika surebilir)")
+    rows = find_creators(cfg)
     out_csv = cfg.get("output_csv", "creators.csv")
     save_csv(rows, out_csv)
     print(f"\n=== BITTI ===\n{len(rows)} uretici bulundu -> {out_csv}")
+    for r in rows[:10]:
+        print(f"  @{r['username']}  {r['followers']} takipci")
 
 
 if __name__ == "__main__":
-    if TikTokApi is None:
-        print("HATA: TikTokApi kurulu degil. Once: pip install -r requirements.txt")
-        sys.exit(1)
-    asyncio.run(_cli())
+    _cli()
