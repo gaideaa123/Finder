@@ -6,7 +6,7 @@
 <title>CaptionAI · İçerik Üretici Bulucu</title>
 <style>
   :root { --bg:#0b0b12; --panel:#14141f; --panel-2:#1b1b2a; --border:#2a2a3c;
-    --text:#e9e9f2; --muted:#a0a0b8; --accent:#a855f7; --accent-2:#ec4899; --green:#22c55e; }
+    --text:#e9e9f2; --muted:#a0a0b8; --accent:#a855f7; --accent-2:#ec4899; --green:#22c55e; --red:#ef4444; }
   * { box-sizing: border-box; }
   body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
     background:var(--bg); color:var(--text); -webkit-font-smoothing:antialiased; }
@@ -25,11 +25,15 @@
 
   label { display:block; font-size:13px; color:var(--muted); margin:14px 0 6px; }
   label:first-of-type { margin-top:0; }
-  input, textarea { width:100%; background:var(--panel-2); border:1px solid var(--border);
+  input[type=text], input[type=password], input[type=number], textarea, select {
+    width:100%; background:var(--panel-2); border:1px solid var(--border);
     color:var(--text); border-radius:10px; padding:10px 12px; font-size:14px; font-family:inherit; resize:vertical; }
   input:focus, textarea:focus { outline:none; border-color:var(--accent); }
   .row { display:flex; gap:10px; }
   .row > div { flex:1; }
+
+  .check { display:flex; align-items:center; gap:8px; margin:10px 0; font-size:13px; color:var(--text); cursor:pointer; }
+  .check input { width:16px; height:16px; accent-color:var(--accent); }
 
   .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; border:none; cursor:pointer;
     border-radius:12px; font-weight:700; font-size:15px; padding:13px 18px; width:100%; color:white;
@@ -65,17 +69,21 @@
   .results-tools input, .results-tools select { width:auto; flex:1; min-width:140px; }
 
   .creators { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:16px; }
-  .creator { background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:16px; display:flex; flex-direction:column; gap:12px; }
-  .creator-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .creator { position:relative; background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:16px; display:flex; flex-direction:column; gap:12px; }
+  .del { position:absolute; top:10px; right:10px; width:26px; height:26px; border-radius:8px; border:1px solid var(--border);
+    background:var(--panel-2); color:var(--muted); cursor:pointer; font-size:15px; line-height:1; display:grid; place-items:center; transition:all .15s ease; }
+  .del:hover { background:var(--red); color:white; border-color:transparent; }
+  .creator-head { display:flex; align-items:center; justify-content:space-between; gap:10px; padding-right:30px; }
   .creator-name { font-weight:800; font-size:16px; }
   .creator-sub { color:var(--muted); font-size:12px; margin-top:2px; }
   .badges { display:flex; gap:6px; flex-wrap:wrap; }
   .badge { font-size:11px; background:var(--panel-2); border:1px solid var(--border); border-radius:999px; padding:4px 9px; color:var(--muted); }
   .badge.lang { color:var(--accent); border-color:rgba(168,85,247,.35); text-transform:uppercase; }
+  .badge.mail { color:var(--green); border-color:rgba(34,197,94,.35); cursor:pointer; }
 
   .dm { background:var(--panel-2); border:1px solid var(--border); border-radius:10px; padding:10px; font-size:13px; line-height:1.5; white-space:pre-wrap; min-height:90px; max-height:220px; overflow-y:auto; }
-  .creator-actions { display:flex; gap:8px; }
-  .creator-actions .btn { flex:1; }
+  .creator-actions { display:flex; gap:8px; flex-wrap:wrap; }
+  .creator-actions .btn { flex:1; min-width:110px; }
   .copied { background:var(--green) !important; }
   .empty { text-align:center; color:var(--muted); padding:60px 20px; }
   .empty .big { font-size:40px; margin-bottom:12px; }
@@ -100,12 +108,10 @@
 
       <label>Ülke / Dil (tıkla seç, birden fazla olabilir)</label>
       <div class="countries" id="countryBtns"></div>
-      <p class="hint">Hiç seçmezsen tüm ülkeler taranır. Seçtiğin dile göre aşağıdaki niş çipleri de değişir.</p>
 
       <label>Hashtag'ler (virgülle ayır)</label>
       <textarea id="hashtags" rows="3" placeholder="yemektarifi, foodtiktok..."></textarea>
       <div class="chips" id="hashtagChips"></div>
-      <p class="hint">Nişe tıkla, hashtag'ler eklenir. Çipler seçtiğin dile göre güncellenir.</p>
 
       <div class="row">
         <div><label>Min takipçi</label><input id="min_followers" type="number" value="3000" /></div>
@@ -114,13 +120,18 @@
       <label>Hedef sayı</label>
       <input id="target" type="number" value="100" />
 
+      <label class="check"><input type="checkbox" id="strict_country" checked /> Sadece seçili ülke/dil (yabancı sızmasın)</label>
+      <label class="check"><input type="checkbox" id="require_email" /> Sadece email'i olanlar (outreach için)</label>
+      <label class="check"><input type="checkbox" id="skip_seen" checked /> Daha önce bulunanları atla</label>
+
       <label>DM şablonları (dil başına 3 varyant, <code>---</code> ile ayrılır)</label>
       <div class="tabs" id="tplTabs"></div>
       <div id="tplBoxes"></div>
-      <p class="hint">Her creator'a dilindeki varyantlardan rastgele biri gider (sürekli aynı metin olmaz). <code>{name}</code> otomatik dolar.</p>
+      <p class="hint">Her creator'a dilindeki varyantlardan rastgele biri gider. <code>{name}</code> otomatik dolar.</p>
 
-      <div style="margin-top:16px">
+      <div style="margin-top:16px; display:flex; gap:8px">
         <button class="btn" id="searchBtn" onclick="runSearch()">🚀 Üreticileri Bul</button>
+        <button class="btn secondary small" onclick="resetHistory()" title="Bulunan geçmişini temizle">🗑️ Geçmiş</button>
       </div>
       <div class="status" id="status"></div>
     </div>
@@ -130,16 +141,17 @@
         <h2 style="margin:0">Bulunan Üreticiler</h2>
         <div style="display:flex; gap:10px; align-items:center">
           <span class="count-pill" id="countPill">0 kişi</span>
-          <button class="btn secondary small" id="copyAllBtn" onclick="copyAll()" disabled>Tümünü Kopyala</button>
-          <button class="btn secondary small" id="csvBtn" onclick="downloadCsv()" disabled>CSV İndir</button>
+          <button class="btn secondary small" id="copyAllBtn" onclick="copyAll()" disabled>Tüm DM'ler</button>
+          <button class="btn secondary small" id="csvBtn" onclick="downloadCsv()" disabled>CSV</button>
         </div>
       </div>
       <div class="results-tools">
-        <input id="searchBox" placeholder="🔍 Listede ara (isim, @kullanıcı)" oninput="render()" />
+        <input id="searchBox" type="text" placeholder="🔍 Listede ara" oninput="render()" />
         <select id="sortBy" onchange="render()">
           <option value="followers_desc">Takipçi ↓</option>
           <option value="followers_asc">Takipçi ↑</option>
           <option value="name">İsme göre</option>
+          <option value="email">Email olanlar önce</option>
         </select>
       </div>
       <div class="creators" id="results"></div>
@@ -155,36 +167,19 @@
   let CREATORS = [];
   let activeTpl = 'tr';
 
-  // 6 hedef ülke/dil (kod -> {etiket, iso, hashtag setleri})
   const COUNTRIES = {
-    tr: { label:'🇹🇷 Türkçe', iso:'Türkiye' },
-    en: { label:'🇺🇸 İngilizce', iso:'ABD' },
-    es: { label:'🇪🇸 İspanyol', iso:'İspanya' },
-    de: { label:'🇩🇪 Almanca', iso:'Almanya' },
-    fr: { label:'🇫🇷 Fransızca', iso:'Fransa' },
-    ar: { label:'🇸🇦 Arapça', iso:'Arabistan' },
+    tr:{label:'🇹🇷 Türkçe', iso:'Türkiye'}, en:{label:'🇺🇸 İngilizce', iso:'ABD'},
+    es:{label:'🇪🇸 İspanyol', iso:'İspanya'}, de:{label:'🇩🇪 Almanca', iso:'Almanya'},
+    fr:{label:'🇫🇷 Fransızca', iso:'Fransa'}, ar:{label:'🇸🇦 Arapça', iso:'Arabistan'},
   };
 
-  // Dile göre niş hashtag çipleri
   const NICHE_CHIPS = {
-    tr: { '🍽️ Yemek':['yemektarifi','evyemekleri','tarifpaylaşımı'], '📹 Vlog':['günlükvlog','vloglife'],
-          '💄 Moda':['kombin','makyaj','ciltbakımı'], '💪 Fitness':['spormotivasyon','gymtok'],
-          '✈️ Gezi':['gezilecekyerler','seyahat'], '🧠 Bilgi':['bilgipaylaşımı','kişiselgelişim'] },
-    en: { '🍽️ Food':['foodtiktok','recipe','easyrecipes'], '📹 Vlog':['dailyvlog','vlog','dayinmylife'],
-          '💄 Fashion':['ootd','styletips','fashiontiktok'], '💪 Fitness':['gymtok','fittok','workout'],
-          '✈️ Travel':['traveltok','wanderlust'], '🧠 Info':['learnontiktok','tips','didyouknow'] },
-    es: { '🍽️ Comida':['recetas','comida','cocina'], '📹 Vlog':['vlogdiario','vlog'],
-          '💄 Moda':['moda','belleza','outfit'], '💪 Fitness':['gimnasio','entrenamiento'],
-          '✈️ Viajes':['viajes','turismo'], '🧠 Info':['aprende','consejos'] },
-    de: { '🍽️ Essen':['rezepte','essen','kochen'], '📹 Vlog':['vlog','alltag'],
-          '💄 Mode':['mode','beauty','outfit'], '💪 Fitness':['fitness','training'],
-          '✈️ Reisen':['reisen','urlaub'], '🧠 Wissen':['lernen','tipps'] },
-    fr: { '🍽️ Cuisine':['recette','cuisine','food'], '📹 Vlog':['vlog','quotidien'],
-          '💄 Mode':['mode','beaute','outfit'], '💪 Fitness':['musculation','sport'],
-          '✈️ Voyage':['voyage','tourisme'], '🧠 Info':['apprendresurtiktok','astuces'] },
-    ar: { '🍽️ طعام':['وصفات','طبخ','اكل'], '📹 فلوق':['فلوق','يوميات'],
-          '💄 موضة':['موضة','مكياج','عناية'], '💪 لياقة':['رياضة','تمارين'],
-          '✈️ سفر':['سفر','سياحة'], '🧠 معلومات':['معلومات','نصائح'] },
+    tr:{'🍽️ Yemek':['yemektarifi','evyemekleri','tarifpaylaşımı'],'📹 Vlog':['günlükvlog','vloglife'],'💄 Moda':['kombin','makyaj','ciltbakımı'],'💪 Fitness':['spormotivasyon','gymtok'],'✈️ Gezi':['gezilecekyerler','seyahat'],'🧠 Bilgi':['bilgipaylaşımı','kişiselgelişim']},
+    en:{'🍽️ Food':['foodtiktok','recipe','easyrecipes'],'📹 Vlog':['dailyvlog','vlog','dayinmylife'],'💄 Fashion':['ootd','styletips','fashiontiktok'],'💪 Fitness':['gymtok','fittok','workout'],'✈️ Travel':['traveltok','wanderlust'],'🧠 Info':['learnontiktok','tips','didyouknow']},
+    es:{'🍽️ Comida':['recetas','comida','cocina'],'📹 Vlog':['vlogdiario','vlog'],'💄 Moda':['moda','belleza','outfit'],'💪 Fitness':['gimnasio','entrenamiento'],'✈️ Viajes':['viajes','turismo'],'🧠 Info':['aprende','consejos']},
+    de:{'🍽️ Essen':['rezepte','essen','kochen'],'📹 Vlog':['vlog','alltag'],'💄 Mode':['mode','beauty','outfit'],'💪 Fitness':['fitness','training'],'✈️ Reisen':['reisen','urlaub'],'🧠 Wissen':['lernen','tipps']},
+    fr:{'🍽️ Cuisine':['recette','cuisine','food'],'📹 Vlog':['vlog','quotidien'],'💄 Mode':['mode','beaute','outfit'],'💪 Fitness':['musculation','sport'],'✈️ Voyage':['voyage','tourisme'],'🧠 Info':['apprendresurtiktok','astuces']},
+    ar:{'🍽️ طعام':['وصفات','طبخ','اكل'],'📹 فلوق':['فلوق','يوميات'],'💄 موضة':['موضة','مكياج','عناية'],'💪 لياقة':['رياضة','تمارين'],'✈️ سفر':['سفر','سياحة'],'🧠 معلومات':['معلومات','نصائح']},
   };
 
   const DEFAULT_HASHTAGS = {
@@ -198,125 +193,114 @@
 
   const selectedCountries = new Set();
 
-  // --- Ön-doldur ---
   if (CFG.apify_token && !String(CFG.apify_token).includes('YAPISTIR')) document.getElementById('apify_token').value = CFG.apify_token;
   if (CFG.min_followers) document.getElementById('min_followers').value = CFG.min_followers;
   if (CFG.max_followers) document.getElementById('max_followers').value = CFG.max_followers;
   if (CFG.target_count) document.getElementById('target').value = CFG.target_count;
   document.getElementById('hashtags').value = (CFG.hashtags && CFG.hashtags.length) ? CFG.hashtags.join(', ') : DEFAULT_HASHTAGS.tr;
 
-  // Ülke butonları
   (function buildCountries(){
-    const box = document.getElementById('countryBtns');
-    box.innerHTML = Object.keys(COUNTRIES).map(k =>
-      '<div class="cbtn" id="c-'+k+'" onclick="toggleCountry(\''+k+'\')">'+COUNTRIES[k].label+'</div>'
-    ).join('');
+    document.getElementById('countryBtns').innerHTML = Object.keys(COUNTRIES).map(k =>
+      '<div class="cbtn" id="c-'+k+'" onclick="toggleCountry(\''+k+'\')">'+COUNTRIES[k].label+'</div>').join('');
   })();
 
   function toggleCountry(k){
-    const el = document.getElementById('c-'+k);
-    if (selectedCountries.has(k)) { selectedCountries.delete(k); el.classList.remove('on'); }
-    else { selectedCountries.add(k); el.classList.add('on'); }
-    // Seçilen dile göre çipleri ve şablon sekmesini güncelle
-    const first = selectedCountries.values().next().value;
-    if (first) { buildChips(first); switchTpl(first); }
-    else buildChips('tr');
+    const el=document.getElementById('c-'+k);
+    if(selectedCountries.has(k)){selectedCountries.delete(k);el.classList.remove('on');}
+    else{selectedCountries.add(k);el.classList.add('on');}
+    const first=selectedCountries.values().next().value;
+    if(first){buildChips(first);switchTpl(first);} else buildChips('tr');
   }
 
-  // Niş çipleri (dile göre)
   function buildChips(lang){
-    const map = NICHE_CHIPS[lang] || NICHE_CHIPS.tr;
-    const box = document.getElementById('hashtagChips');
-    box.innerHTML = Object.keys(map).map(k =>
-      '<span class="chip" onclick="addNiche(\''+lang+'\',\''+k.replace(/'/g,"\\'")+'\')">'+k+'</span>'
-    ).join('');
+    const map=NICHE_CHIPS[lang]||NICHE_CHIPS.tr;
+    document.getElementById('hashtagChips').innerHTML=Object.keys(map).map(k =>
+      '<span class="chip" onclick="addNiche(\''+lang+'\',\''+k.replace(/'/g,"\\'")+'\')">'+k+'</span>').join('');
   }
   buildChips('tr');
 
-  function addNiche(lang, key){
-    const tags = (NICHE_CHIPS[lang]||{})[key] || [];
-    const el = document.getElementById('hashtags');
-    const existing = new Set(el.value.split(',').map(s=>s.trim().replace(/^#/,'')).filter(Boolean));
-    tags.forEach(t=>existing.add(t));
-    el.value = Array.from(existing).join(', ');
+  function addNiche(lang,key){
+    const tags=(NICHE_CHIPS[lang]||{})[key]||[];
+    const el=document.getElementById('hashtags');
+    const ex=new Set(el.value.split(',').map(s=>s.trim().replace(/^#/,'')).filter(Boolean));
+    tags.forEach(t=>ex.add(t)); el.value=Array.from(ex).join(', ');
   }
 
-  // Şablon sekmeleri (6 dil)
   (function buildTpl(){
-    const tabs = document.getElementById('tplTabs');
-    const boxes = document.getElementById('tplBoxes');
-    tabs.innerHTML = LANGS.map(l =>
-      '<div class="tab'+(l==='tr'?' active':'')+'" id="tt-'+l+'" onclick="switchTpl(\''+l+'\')">'+COUNTRIES[l].label+'</div>'
-    ).join('');
-    boxes.innerHTML = LANGS.map(l =>
-      '<textarea id="tpl-'+l+'" rows="10" style="display:'+(l==='tr'?'block':'none')+'">'+ (TEMPLATES[l]||'').replace(/</g,'&lt;') +'</textarea>'
-    ).join('');
+    document.getElementById('tplTabs').innerHTML=LANGS.map(l =>
+      '<div class="tab'+(l==='tr'?' active':'')+'" id="tt-'+l+'" onclick="switchTpl(\''+l+'\')">'+COUNTRIES[l].label+'</div>').join('');
+    document.getElementById('tplBoxes').innerHTML=LANGS.map(l =>
+      '<textarea id="tpl-'+l+'" rows="9" style="display:'+(l==='tr'?'block':'none')+'">'+(TEMPLATES[l]||'').replace(/</g,'&lt;')+'</textarea>').join('');
   })();
 
   function switchTpl(l){
-    activeTpl = l;
-    LANGS.forEach(x=>{
-      document.getElementById('tpl-'+x).style.display = (x===l)?'block':'none';
-      document.getElementById('tt-'+x).classList.toggle('active', x===l);
-    });
+    activeTpl=l;
+    LANGS.forEach(x=>{ document.getElementById('tpl-'+x).style.display=(x===l)?'block':'none'; document.getElementById('tt-'+x).classList.toggle('active',x===l); });
   }
 
   function setStatus(msg,isErr){ const el=document.getElementById('status'); el.textContent=msg; el.className='status'+(isErr?' err':''); }
 
   async function runSearch(){
-    const btn = document.getElementById('searchBtn');
-    const hashtags = document.getElementById('hashtags').value.split(',').map(s=>s.trim().replace(/^#/,'')).filter(Boolean);
-    const token = document.getElementById('apify_token').value.trim();
-    const countries = Array.from(selectedCountries).map(k=>COUNTRIES[k].iso);
+    const btn=document.getElementById('searchBtn');
+    const hashtags=document.getElementById('hashtags').value.split(',').map(s=>s.trim().replace(/^#/,'')).filter(Boolean);
+    const token=document.getElementById('apify_token').value.trim();
+    const countries=Array.from(selectedCountries).map(k=>COUNTRIES[k].iso);
+    if(!token){setStatus('Apify API token gir.',true);return;}
+    if(!hashtags.length){setStatus('En az bir hashtag gir.',true);return;}
 
-    if (!token){ setStatus('Apify API token gir.',true); return; }
-    if (!hashtags.length){ setStatus('En az bir hashtag gir.',true); return; }
+    const templates={}; LANGS.forEach(l=>{templates[l]=document.getElementById('tpl-'+l).value;});
 
-    const templates = {};
-    LANGS.forEach(l => { templates[l] = document.getElementById('tpl-'+l).value; });
-
-    const payload = {
-      apify_token:token, hashtags, countries,
+    const payload={ apify_token:token, hashtags, countries,
       min_followers:Number(document.getElementById('min_followers').value)||3000,
       max_followers:Number(document.getElementById('max_followers').value)||80000,
       target_count:Number(document.getElementById('target').value)||100,
-      templates,
-    };
+      strict_country:document.getElementById('strict_country').checked,
+      require_email:document.getElementById('require_email').checked,
+      skip_seen:document.getElementById('skip_seen').checked,
+      templates };
 
-    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Taranıyor...';
+    btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Taranıyor...';
     setStatus('Apify üzerinden aranıyor, birkaç dakika sürebilir...');
-
     try {
-      const res = await fetch('/api/search',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error||'Bilinmeyen hata');
-      CREATORS = data.creators; render();
-      setStatus('Tamam! '+data.count+' üretici bulundu.');
+      const res=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      const data=await res.json();
+      if(!data.ok) throw new Error(data.error||'Bilinmeyen hata');
+      CREATORS=data.creators; render();
+      setStatus('Tamam! '+data.count+' üretici bulundu.'+(data.count===0?' (Filtreleri gevşetmeyi dene)':''));
     } catch(e){ setStatus('Hata: '+e.message,true); }
     finally { btn.disabled=false; btn.innerHTML='🚀 Üreticileri Bul'; }
   }
 
+  async function resetHistory(){
+    if(!confirm('Bulunan geçmişi silinecek, aynı kişiler tekrar gelebilir. Emin misin?')) return;
+    try { await fetch('/api/reset-history',{method:'POST'}); setStatus('Geçmiş temizlendi.'); }
+    catch(e){ setStatus('Geçmiş temizlenemedi: '+e.message,true); }
+  }
+
   function visibleList(){
-    const q = document.getElementById('searchBox').value.trim().toLowerCase();
-    let list = CREATORS.filter(c => !q || (c.nickname||'').toLowerCase().includes(q) || (c.username||'').toLowerCase().includes(q));
-    const sort = document.getElementById('sortBy').value;
-    if (sort==='followers_desc') list.sort((a,b)=>b.followers-a.followers);
-    else if (sort==='followers_asc') list.sort((a,b)=>a.followers-b.followers);
-    else if (sort==='name') list.sort((a,b)=>(a.nickname||a.username).localeCompare(b.nickname||b.username));
+    const q=document.getElementById('searchBox').value.trim().toLowerCase();
+    let list=CREATORS.filter(c=>!q||(c.nickname||'').toLowerCase().includes(q)||(c.username||'').toLowerCase().includes(q));
+    const s=document.getElementById('sortBy').value;
+    if(s==='followers_desc') list.sort((a,b)=>b.followers-a.followers);
+    else if(s==='followers_asc') list.sort((a,b)=>a.followers-b.followers);
+    else if(s==='name') list.sort((a,b)=>(a.nickname||a.username).localeCompare(b.nickname||b.username));
+    else if(s==='email') list.sort((a,b)=>(b.email?1:0)-(a.email?1:0));
     return list;
   }
 
   function render(){
     const wrap=document.getElementById('results'); const empty=document.getElementById('empty');
-    const list = visibleList();
-    document.getElementById('countPill').textContent = CREATORS.length+' kişi';
-    document.getElementById('csvBtn').disabled = CREATORS.length===0;
-    document.getElementById('copyAllBtn').disabled = CREATORS.length===0;
-    if (!list.length){ empty.style.display='block'; wrap.innerHTML=''; return; }
+    const list=visibleList();
+    document.getElementById('countPill').textContent=CREATORS.length+' kişi';
+    document.getElementById('csvBtn').disabled=CREATORS.length===0;
+    document.getElementById('copyAllBtn').disabled=CREATORS.length===0;
+    if(!list.length){ empty.style.display='block'; wrap.innerHTML=''; return; }
     empty.style.display='none';
-    wrap.innerHTML = list.map((c) => {
-      const gi = CREATORS.indexOf(c);
+    wrap.innerHTML=list.map((c)=>{
+      const gi=CREATORS.indexOf(c);
+      const mail = c.email ? '<span class="badge mail" title="Kopyala" onclick="copyEmail('+gi+',this)">✉️ '+escapeHtml(c.email)+'</span>' : '';
       return '<div class="creator">'+
+        '<button class="del" title="Listeden kaldır" onclick="removeCard('+gi+')">×</button>'+
         '<div class="creator-head"><div>'+
           '<div class="creator-name">'+escapeHtml(c.nickname||c.username)+'</div>'+
           '<div class="creator-sub">@'+escapeHtml(c.username)+(c.country?' · '+escapeHtml(c.country):'')+'</div>'+
@@ -324,22 +308,29 @@
           '<span class="badge">'+formatNum(c.followers)+' takipçi</span>'+
           '<span class="badge lang">'+escapeHtml(c.lang||'en')+'</span>'+
         '</div></div>'+
+        (mail?'<div class="badges">'+mail+'</div>':'')+
         '<div class="dm">'+escapeHtml(c.message)+'</div>'+
         '<div class="creator-actions">'+
-          '<button class="btn small" onclick="sendDm('+gi+',this)">💬 DM At (Kopyala + Aç)</button>'+
+          '<button class="btn small" onclick="sendDm('+gi+',this)">💬 DM At</button>'+
           '<button class="btn small secondary" onclick="copyDm('+gi+',this)">📋 Kopyala</button>'+
+          (c.email?'<button class="btn small secondary" onclick="copyEmail('+gi+',this)">✉️ Email</button>':'')+
         '</div></div>';
     }).join('');
   }
 
-  function sendDm(i,btn){ const c=CREATORS[i]; navigator.clipboard.writeText(c.message).then(()=>{ const o=btn.innerHTML; btn.innerHTML='✅ Kopyalandı, profil açılıyor'; btn.classList.add('copied'); window.open(c.profile,'_blank','noopener'); setTimeout(()=>{btn.innerHTML=o;btn.classList.remove('copied');},2000); }); }
-  function copyDm(i,btn){ navigator.clipboard.writeText(CREATORS[i].message).then(()=>{ const o=btn.innerHTML; btn.innerHTML='✅ Kopyalandı'; btn.classList.add('copied'); setTimeout(()=>{btn.innerHTML=o;btn.classList.remove('copied');},1500); }); }
-  function copyAll(){ const txt = CREATORS.map(c=>'@'+c.username+'\n'+c.message).join('\n\n----------\n\n'); navigator.clipboard.writeText(txt).then(()=>setStatus('Tüm DM'+"'"+'ler panoya kopyalandı ('+CREATORS.length+' kişi).')); }
+  // Çarpı: kartı listeden kaldır (tekrar görmezsin)
+  function removeCard(i){ CREATORS.splice(i,1); render(); }
+
+  function sendDm(i,btn){ const c=CREATORS[i]; navigator.clipboard.writeText(c.message).then(()=>{ const o=btn.innerHTML; btn.innerHTML='✅ Açılıyor'; btn.classList.add('copied'); window.open(c.profile,'_blank','noopener'); setTimeout(()=>{btn.innerHTML=o;btn.classList.remove('copied');},2000); }); }
+  function copyDm(i,btn){ navigator.clipboard.writeText(CREATORS[i].message).then(()=>flash(btn,'✅ Kopyalandı')); }
+  function copyEmail(i,btn){ const e=CREATORS[i].email; if(!e) return; navigator.clipboard.writeText(e).then(()=>flash(btn,'✅ Email kopyalandı')); }
+  function flash(btn,txt){ const o=btn.innerHTML; btn.innerHTML=txt; btn.classList.add('copied'); setTimeout(()=>{btn.innerHTML=o;btn.classList.remove('copied');},1500); }
+  function copyAll(){ const t=CREATORS.map(c=>'@'+c.username+(c.email?' ('+c.email+')':'')+'\n'+c.message).join('\n\n----------\n\n'); navigator.clipboard.writeText(t).then(()=>setStatus('Tüm DM'+"'"+'ler kopyalandı ('+CREATORS.length+').')); }
 
   function downloadCsv(){
-    const header=['username','nickname','followers','country','lang','email','bio','profile'];
+    const header=['username','nickname','followers','country','lang','email','bio_link','bio','profile'];
     const lines=[header.join(',')];
-    CREATORS.forEach(c=>{ lines.push([c.username,'"'+(c.nickname||'').replace(/"/g,'""')+'"',c.followers,c.country||'',c.lang||'',c.email||'','"'+(c.bio||'').replace(/"/g,'""').replace(/\n/g,' ')+'"',c.profile].join(',')); });
+    CREATORS.forEach(c=>{ lines.push([c.username,'"'+(c.nickname||'').replace(/"/g,'""')+'"',c.followers,c.country||'',c.lang||'',c.email||'',c.bio_link||'','"'+(c.bio||'').replace(/"/g,'""').replace(/\n/g,' ')+'"',c.profile].join(',')); });
     const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8'});
     const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='creators.csv'; a.click();
   }
