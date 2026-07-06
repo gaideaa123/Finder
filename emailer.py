@@ -1,13 +1,13 @@
 """
-CaptionAI Finder - Coklu Hesap Email Otomasyonu
-===============================================
+CaptionAI Finder - Cok Hesapli Otomatik Email Gonderici
+=======================================================
 
-Birden fazla Gmail/Outlook hesabi eklenir. Her hesabin gunluk limiti (varsayilan
-30) dolunca otomatik sonraki hesaba gecilir; tum hesaplar dolunca durur.
-Daha once email gonderilmis kisiye tekrar gonderilmez (CRM 'sent' garantisi).
+accounts: [{email, password(app pw), from_name}, ...]
+Her hesap gunde daily_limit (30) kadar atar; dolunca sonraki hesaba gecer.
+Hepsi dolunca durur. Ayni email adresine ikinci kez atmaz.
 
-Gmail icin: normal sifre DEGIL, 'uygulama sifresi' (app password) kullan.
-Arka planda thread'de calisir; durum get_status ile sorgulanir.
+Gmail icin uygulama sifresi gerekir (normal sifre degil):
+  myaccount.google.com/apppasswords
 """
 
 import random
@@ -29,7 +29,7 @@ SMTP_PRESETS = {
 _state = {
     "running": False, "sent": 0, "failed": 0, "total": 0,
     "last": "", "error": "", "stopped": False, "active_account": "",
-    "accounts_used": 0,
+    "accounts_status": [],
 }
 _lock = threading.Lock()
 
@@ -44,7 +44,15 @@ def stop_campaign() -> None:
         _state["stopped"] = True
 
 
-def _send_one(server, from_addr, from_name, to_addr, subject, body) -> None:
+def _smtp_login(provider: str, user: str, pw: str):
+    host, port = SMTP_PRESETS.get(provider, SMTP_PRESETS["gmail"])
+    server = smtplib.SMTP(host, port, timeout=30)
+    server.starttls()
+    server.login(user, pw)
+    return server
+
+
+def _send(server, from_addr, from_name, to_addr, subject, body) -> None:
     msg = MIMEMultipart()
     msg["From"] = f"{from_name} <{from_addr}>" if from_name else from_addr
     msg["To"] = to_addr
@@ -53,29 +61,28 @@ def _send_one(server, from_addr, from_name, to_addr, subject, body) -> None:
     server.sendmail(from_addr, [to_addr], msg.as_string())
 
 
-def _login(provider: str, user: str, pw: str):
-    host, port = SMTP_PRESETS.get(provider, SMTP_PRESETS["gmail"])
-    server = smtplib.SMTP(host, port, timeout=30)
-    server.starttls()
-    server.login(user, pw)
-    return server
-
-
 def _run(cfg: dict) -> None:
-    accounts: List[dict] = cfg["accounts"]          # [{email, password, provider, from_name}]
-    per_account_limit = int(cfg.get("daily_limit", 30))
+    provider = cfg.get("provider", "gmail")
+    accounts: List[dict] = cfg.get("accounts", [])
     subject = cfg.get("subject", "videolarin icin ufak bir sey")
+    daily_limit = int(cfg.get("daily_limit", 30))
     min_delay = float(cfg.get("min_delay", 25))
     max_delay = float(cfg.get("max_delay", 90))
     build_body: Callable[[dict], str] = cfg["build_body"]
 
-    # Gonderilecekler: email'i olan + daha once email gonderilmemis (queued) kisiler
-    queue = [c for c in crm.get_queue(channel="email", limit=5000) if c.get("email")]
+    # Gonderilecek kuyruk (email'li, henuz gonderilmemis). Ayni email'e iki kez atma.
+    seen_emails = set()
+    queue = []
+    for c in crm.email_queue(limit=5000):
+        em = (c.get("email") or "").strip().lower()
+        if not em or em in seen_emails:
+            continue
+        seen_emails.add(em)
+        queue.append(c)
 
     with _lock:
         _state.update({"running": True, "sent": 0, "failed": 0, "total": len(queue),
-                       "last": "", "error": "", "stopped": False, "active_account": "",
-                       "accounts_used": 0})
+                       "last": "", "error": "", "stopped": False, "active_account": ""})
 
     if not queue:
         with _lock:
@@ -88,59 +95,54 @@ def _run(cfg: dict) -> None:
             _state["error"] = "Hic email hesabi eklenmemis."
         return
 
-    qi = 0  # kuyruk indeksi
-    for acc_idx, acc in enumerate(accounts):
+    qi = 0
+    for acc in accounts:
         with _lock:
-            if _state["stopped"] or qi >= len(queue):
+            if _state["stopped"]:
                 break
-        provider = acc.get("provider", "gmail")
-        user = acc.get("email", "")
-        pw = acc.get("password", "")
+        user = (acc.get("email") or "").strip()
+        pw = (acc.get("password") or "").strip()
         from_name = acc.get("from_name", "")
         if not user or not pw:
             continue
 
-        # Bu hesabin bugun kalan limiti (ayni hesap birden cok kampanyada kullanildiysa)
-        already = crm.sent_today_by_account(user)
-        remaining = max(0, per_account_limit - already)
+        # Bu hesabin bugun kalan kotasi
+        already = crm.sent_today_account(user)
+        remaining = max(0, daily_limit - already)
         if remaining <= 0:
-            continue
-
-        try:
-            server = _login(provider, user, pw)
-        except Exception as e:  # noqa: BLE001
-            with _lock:
-                _state["error"] = f"{user}: giris hatasi ({e})"
-            continue
+            continue  # bu hesap bugun dolu, sonrakine gec
 
         with _lock:
             _state["active_account"] = user
-            _state["accounts_used"] = acc_idx + 1
 
-        sent_this_account = 0
         try:
-            while qi < len(queue) and sent_this_account < remaining:
+            server = _smtp_login(provider, user, pw)
+        except Exception as e:  # noqa: BLE001
+            with _lock:
+                _state["error"] = f"{user} giris hatasi: {e}"
+            continue  # bu hesap girilemedi, sonrakine gec
+
+        try:
+            sent_this_acc = 0
+            while qi < len(queue) and sent_this_acc < remaining:
                 with _lock:
                     if _state["stopped"]:
                         break
                 c = queue[qi]
                 qi += 1
-                # Guvenlik: bu arada baska kampanya gondermis olabilir
-                if crm.is_emailed(c["username"]):
-                    continue
                 body = build_body(c)
                 try:
-                    _send_one(server, user, from_name, c["email"], subject, body)
+                    _send(server, user, from_name, c["email"], subject, body)
                     crm.set_message(c["username"], body)
                     crm.mark_sent(c["username"], channel="email", account=user)
-                    sent_this_account += 1
+                    sent_this_acc += 1
                     with _lock:
                         _state["sent"] += 1
-                        _state["last"] = f"{c['email']} ({user})"
+                        _state["last"] = c["email"]
                 except Exception as e:  # noqa: BLE001
                     with _lock:
                         _state["failed"] += 1
-                        _state["error"] = str(e)[:150]
+                        _state["error"] = str(e)[:200]
                 time.sleep(random.uniform(min_delay, max_delay))
         finally:
             try:
@@ -148,14 +150,14 @@ def _run(cfg: dict) -> None:
             except Exception:
                 pass
 
+        if qi >= len(queue):
+            break  # kuyruk bitti
+
     with _lock:
         _state["running"] = False
-        if qi >= len(queue) and not _state["stopped"]:
-            _state["last"] = _state["last"] + "  (kuyruk bitti)"
 
 
 def start_email_campaign(cfg: dict) -> dict:
-    """cfg: accounts(list), daily_limit, subject, min_delay, max_delay, build_body."""
     with _lock:
         if _state["running"]:
             return {"ok": False, "error": "Zaten bir kampanya calisiyor."}
@@ -163,6 +165,5 @@ def start_email_campaign(cfg: dict) -> dict:
         return {"ok": False, "error": "En az bir email hesabi ekle."}
     if not cfg.get("build_body"):
         return {"ok": False, "error": "build_body eksik."}
-    t = threading.Thread(target=_run, args=(cfg,), daemon=True)
-    t.start()
+    threading.Thread(target=_run, args=(cfg,), daemon=True).start()
     return {"ok": True}
