@@ -8,6 +8,7 @@
     "kombin",
     "gezilecekyerler"
   ],
+  "countries": ["Türkiye"],
   "min_followers": 5000,
   "max_followers": 50000,
   "target_count": 100,
