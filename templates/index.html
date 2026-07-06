@@ -5,122 +5,119 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>CaptionAI · İçerik Üretici Bulucu</title>
 <style>
-  :root {
-    --bg: #0b0b12; --panel: #14141f; --panel-2: #1b1b2a; --border: #2a2a3c;
-    --text: #e9e9f2; --muted: #a0a0b8; --accent: #a855f7; --accent-2: #ec4899; --green: #22c55e;
-  }
+  :root { --bg:#0b0b12; --panel:#14141f; --panel-2:#1b1b2a; --border:#2a2a3c;
+    --text:#e9e9f2; --muted:#a0a0b8; --accent:#a855f7; --accent-2:#ec4899; --green:#22c55e; }
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
-  .wrap { max-width: 1200px; margin: 0 auto; padding: 28px 20px 80px; }
-  header { text-align: center; margin-bottom: 28px; }
-  .logo { display: inline-flex; align-items: center; gap: 10px; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; }
-  .logo .dot { width: 34px; height: 34px; border-radius: 10px;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2)); display: grid; place-items: center; font-size: 18px; }
-  header p { color: var(--muted); margin: 8px 0 0; font-size: 14px; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    background:var(--bg); color:var(--text); -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:1240px; margin:0 auto; padding:28px 20px 80px; }
+  header { text-align:center; margin-bottom:24px; }
+  .logo { display:inline-flex; align-items:center; gap:10px; font-size:26px; font-weight:800; letter-spacing:-0.02em; }
+  .logo .dot { width:34px; height:34px; border-radius:10px;
+    background:linear-gradient(135deg,var(--accent),var(--accent-2)); display:grid; place-items:center; font-size:18px; }
+  header p { color:var(--muted); margin:8px 0 0; font-size:14px; }
 
-  .grid { display: grid; grid-template-columns: 360px 1fr; gap: 20px; align-items: start; }
-  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .grid { display:grid; grid-template-columns:380px 1fr; gap:20px; align-items:start; }
+  @media (max-width:960px){ .grid{ grid-template-columns:1fr; } }
 
-  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 18px; padding: 20px; }
-  .card h2 { margin: 0 0 16px; font-size: 15px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:18px; padding:20px; }
+  .card h2 { margin:0 0 14px; font-size:15px; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); }
 
-  label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
-  label:first-of-type { margin-top: 0; }
-  input, textarea { width: 100%; background: var(--panel-2); border: 1px solid var(--border);
-    color: var(--text); border-radius: 10px; padding: 10px 12px; font-size: 14px; font-family: inherit; resize: vertical; }
-  input:focus, textarea:focus { outline: none; border-color: var(--accent); }
-  .row { display: flex; gap: 10px; }
-  .row > div { flex: 1; }
+  label { display:block; font-size:13px; color:var(--muted); margin:14px 0 6px; }
+  label:first-of-type { margin-top:0; }
+  input, textarea { width:100%; background:var(--panel-2); border:1px solid var(--border);
+    color:var(--text); border-radius:10px; padding:10px 12px; font-size:14px; font-family:inherit; resize:vertical; }
+  input:focus, textarea:focus { outline:none; border-color:var(--accent); }
+  .row { display:flex; gap:10px; }
+  .row > div { flex:1; }
 
-  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: none; cursor: pointer;
-    border-radius: 12px; font-weight: 700; font-size: 15px; padding: 13px 18px; width: 100%; color: white;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2)); transition: transform .12s ease, opacity .2s ease; text-decoration: none; }
-  .btn:hover { transform: translateY(-1px); }
-  .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
-  .btn.secondary { background: var(--panel-2); border: 1px solid var(--border); }
-  .btn.small { width: auto; padding: 8px 14px; font-size: 13px; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; border:none; cursor:pointer;
+    border-radius:12px; font-weight:700; font-size:15px; padding:13px 18px; width:100%; color:white;
+    background:linear-gradient(135deg,var(--accent),var(--accent-2)); transition:transform .12s ease,opacity .2s ease; text-decoration:none; }
+  .btn:hover { transform:translateY(-1px); }
+  .btn:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+  .btn.secondary { background:var(--panel-2); border:1px solid var(--border); }
+  .btn.small { width:auto; padding:8px 14px; font-size:13px; }
 
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-  .chip { font-size: 12px; padding: 5px 10px; border-radius: 999px; cursor: pointer; user-select: none;
-    background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); transition: all .15s ease; }
-  .chip:hover { border-color: var(--accent); color: var(--text); }
+  .countries { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .cbtn { cursor:pointer; user-select:none; text-align:center; padding:10px 6px; border-radius:10px; font-size:13px; font-weight:700;
+    background:var(--panel-2); border:1px solid var(--border); color:var(--muted); transition:all .15s ease; }
+  .cbtn.on { background:linear-gradient(135deg,var(--accent),var(--accent-2)); color:white; border-color:transparent; }
 
-  .hint { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
-  .hint a { color: var(--accent); }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .chip { font-size:12px; padding:5px 10px; border-radius:999px; cursor:pointer; user-select:none;
+    background:var(--panel-2); border:1px solid var(--border); color:var(--muted); transition:all .15s ease; }
+  .chip:hover { border-color:var(--accent); color:var(--text); }
 
-  .status { margin: 16px 0; font-size: 14px; color: var(--muted); min-height: 20px; }
-  .status.err { color: var(--accent-2); }
+  .hint { font-size:12px; color:var(--muted); margin-top:8px; line-height:1.5; }
+  .hint a { color:var(--accent); }
+  .status { margin:14px 0; font-size:14px; color:var(--muted); min-height:20px; }
+  .status.err { color:var(--accent-2); }
 
-  .tabs { display: flex; gap: 6px; margin-bottom: 8px; }
-  .tab { flex: 1; text-align: center; padding: 8px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 700;
-    background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); }
-  .tab.active { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: white; border-color: transparent; }
+  .tabs { display:flex; gap:5px; margin-bottom:8px; flex-wrap:wrap; }
+  .tab { padding:7px 11px; border-radius:8px; cursor:pointer; font-size:13px; font-weight:700;
+    background:var(--panel-2); border:1px solid var(--border); color:var(--muted); }
+  .tab.active { background:linear-gradient(135deg,var(--accent),var(--accent-2)); color:white; border-color:transparent; }
 
-  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 12px; flex-wrap: wrap; }
-  .count-pill { background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; font-size: 13px; font-weight: 700; }
+  .toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; gap:12px; flex-wrap:wrap; }
+  .count-pill { background:var(--panel-2); border:1px solid var(--border); border-radius:999px; padding:6px 14px; font-size:13px; font-weight:700; }
+  .results-tools { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
+  .results-tools input, .results-tools select { width:auto; flex:1; min-width:140px; }
 
-  .creators { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
-  .creator { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-  .creator-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-  .creator-name { font-weight: 800; font-size: 16px; }
-  .creator-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
-  .badges { display: flex; gap: 6px; flex-wrap: wrap; }
-  .badge { font-size: 11px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px; padding: 4px 9px; color: var(--muted); }
-  .badge.lang { color: var(--accent); border-color: rgba(168,85,247,.35); text-transform: uppercase; }
+  .creators { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:16px; }
+  .creator { background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:16px; display:flex; flex-direction:column; gap:12px; }
+  .creator-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .creator-name { font-weight:800; font-size:16px; }
+  .creator-sub { color:var(--muted); font-size:12px; margin-top:2px; }
+  .badges { display:flex; gap:6px; flex-wrap:wrap; }
+  .badge { font-size:11px; background:var(--panel-2); border:1px solid var(--border); border-radius:999px; padding:4px 9px; color:var(--muted); }
+  .badge.lang { color:var(--accent); border-color:rgba(168,85,247,.35); text-transform:uppercase; }
 
-  .dm { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; min-height: 90px; max-height: 200px; overflow-y: auto; }
-  .creator-actions { display: flex; gap: 8px; }
-  .creator-actions .btn { flex: 1; }
-  .copied { background: var(--green) !important; }
-
-  .empty { text-align: center; color: var(--muted); padding: 60px 20px; }
-  .empty .big { font-size: 40px; margin-bottom: 12px; }
-
-  .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.3); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  .dm { background:var(--panel-2); border:1px solid var(--border); border-radius:10px; padding:10px; font-size:13px; line-height:1.5; white-space:pre-wrap; min-height:90px; max-height:220px; overflow-y:auto; }
+  .creator-actions { display:flex; gap:8px; }
+  .creator-actions .btn { flex:1; }
+  .copied { background:var(--green) !important; }
+  .empty { text-align:center; color:var(--muted); padding:60px 20px; }
+  .empty .big { font-size:40px; margin-bottom:12px; }
+  .spinner { width:16px; height:16px; border:2px solid rgba(255,255,255,.3); border-top-color:white; border-radius:50%; animation:spin .7s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
     <div class="logo"><span class="dot">🔎</span> CaptionAI Finder</div>
-    <p>Nişine ve ülkeye göre içerik üreticileri bul, her birine dilinde kişiye özel DM'i hazır al.</p>
+    <p>6 dilde içerik üreticisi bul, her birine dilinde kişiye özel DM'i hazır al.</p>
   </header>
 
   <div class="grid">
-    <!-- SOL: Ayarlar -->
     <div class="card">
       <h2>Ayarlar</h2>
 
       <label>Apify API Token</label>
       <input id="apify_token" type="password" placeholder="apify_api_..." />
-      <p class="hint">Ücretsiz al: <a href="https://console.apify.com/account/integrations" target="_blank" rel="noopener">console.apify.com</a> → API token.</p>
+      <p class="hint">Ücretsiz: <a href="https://console.apify.com/account/integrations" target="_blank" rel="noopener">console.apify.com</a> → API token.</p>
+
+      <label>Ülke / Dil (tıkla seç, birden fazla olabilir)</label>
+      <div class="countries" id="countryBtns"></div>
+      <p class="hint">Hiç seçmezsen tüm ülkeler taranır. Seçtiğin dile göre aşağıdaki niş çipleri de değişir.</p>
 
       <label>Hashtag'ler (virgülle ayır)</label>
-      <textarea id="hashtags" rows="3" placeholder="yemektarifi, gymtok, kombin"></textarea>
+      <textarea id="hashtags" rows="3" placeholder="yemektarifi, foodtiktok..."></textarea>
       <div class="chips" id="hashtagChips"></div>
-      <p class="hint">Nişe tıkla, hashtag'ler kutuya eklenir. Bunlar CaptionAI için seçildi: sık paylaşan, caption'a ihtiyacı olan nişler.</p>
-
-      <label>Ülkeler (virgülle ayır, boş = hepsi)</label>
-      <input id="countries" placeholder="Türkiye, Almanya, ABD" />
-      <p class="hint">"Türkiye" yazarsan sadece Türk creator'lar gelir.</p>
+      <p class="hint">Nişe tıkla, hashtag'ler eklenir. Çipler seçtiğin dile göre güncellenir.</p>
 
       <div class="row">
         <div><label>Min takipçi</label><input id="min_followers" type="number" value="3000" /></div>
         <div><label>Max takipçi</label><input id="max_followers" type="number" value="80000" /></div>
       </div>
-
       <label>Hedef sayı</label>
       <input id="target" type="number" value="100" />
 
-      <label>DM şablonu (<code>{name}</code>, <code>{bio}</code> otomatik dolar)</label>
-      <div class="tabs">
-        <div class="tab active" id="tab-tr" onclick="switchTab('tr')">🇹🇷 Türkçe</div>
-        <div class="tab" id="tab-en" onclick="switchTab('en')">🌍 İngilizce</div>
-      </div>
-      <textarea id="template_tr" rows="9"></textarea>
-      <textarea id="template_en" rows="9" style="display:none"></textarea>
+      <label>DM şablonları (dil başına 3 varyant, <code>---</code> ile ayrılır)</label>
+      <div class="tabs" id="tplTabs"></div>
+      <div id="tplBoxes"></div>
+      <p class="hint">Her creator'a dilindeki varyantlardan rastgele biri gider (sürekli aynı metin olmaz). <code>{name}</code> otomatik dolar.</p>
 
       <div style="margin-top:16px">
         <button class="btn" id="searchBtn" onclick="runSearch()">🚀 Üreticileri Bul</button>
@@ -128,194 +125,227 @@
       <div class="status" id="status"></div>
     </div>
 
-    <!-- SAĞ: Sonuçlar -->
     <div class="card">
       <div class="toolbar">
         <h2 style="margin:0">Bulunan Üreticiler</h2>
         <div style="display:flex; gap:10px; align-items:center">
           <span class="count-pill" id="countPill">0 kişi</span>
+          <button class="btn secondary small" id="copyAllBtn" onclick="copyAll()" disabled>Tümünü Kopyala</button>
           <button class="btn secondary small" id="csvBtn" onclick="downloadCsv()" disabled>CSV İndir</button>
         </div>
       </div>
-      <div class="creators" id="results"></div>
-      <div class="empty" id="empty">
-        <div class="big">👀</div>
-        Henüz sonuç yok. Soldan ayarları girip <b>Üreticileri Bul</b>'a bas.
+      <div class="results-tools">
+        <input id="searchBox" placeholder="🔍 Listede ara (isim, @kullanıcı)" oninput="render()" />
+        <select id="sortBy" onchange="render()">
+          <option value="followers_desc">Takipçi ↓</option>
+          <option value="followers_asc">Takipçi ↑</option>
+          <option value="name">İsme göre</option>
+        </select>
       </div>
+      <div class="creators" id="results"></div>
+      <div class="empty" id="empty"><div class="big">👀</div>Henüz sonuç yok. Soldan ayarları girip <b>Üreticileri Bul</b>'a bas.</div>
     </div>
   </div>
 </div>
 
 <script>
-  const DEFAULT_TR = {{ default_template_tr|tojson }};
-  const DEFAULT_EN = {{ default_template_en|tojson }};
+  const TEMPLATES = {{ templates|tojson }};
   const CFG = {{ cfg|tojson }};
+  const LANGS = {{ langs|tojson }};
   let CREATORS = [];
+  let activeTpl = 'tr';
 
-  // CaptionAI icin optimize niş grupları (caption'a ihtiyacı yüksek, sık paylaşan).
-  const NICHE_CHIPS = {
-    "🍽️ Yemek": ["yemektarifi", "evyemekleri", "tarifpaylaşımı", "foodtiktok"],
-    "📹 Vlog": ["günlükvlog", "vloglife", "vlogtürkçe"],
-    "💄 Moda/Makyaj": ["kombin", "makyaj", "ciltbakımı", "stiltavsiyesi"],
-    "💪 Fitness": ["spormotivasyon", "gymtok", "fitlife", "antrenman"],
-    "✈️ Gezi": ["gezilecekyerler", "seyahat", "kampçılık"],
-    "🧠 Bilgi/Eğitim": ["bilgipaylaşımı", "kişiselgelişim", "öğrenmekeyifli"],
-    "🛒 Küçük İşletme": ["küçükişletme", "elemeği", "kendiişini"]
+  // 6 hedef ülke/dil (kod -> {etiket, iso, hashtag setleri})
+  const COUNTRIES = {
+    tr: { label:'🇹🇷 Türkçe', iso:'Türkiye' },
+    en: { label:'🇺🇸 İngilizce', iso:'ABD' },
+    es: { label:'🇪🇸 İspanyol', iso:'İspanya' },
+    de: { label:'🇩🇪 Almanca', iso:'Almanya' },
+    fr: { label:'🇫🇷 Fransızca', iso:'Fransa' },
+    ar: { label:'🇸🇦 Arapça', iso:'Arabistan' },
   };
 
-  // Ön-doldur
-  document.getElementById('template_tr').value = DEFAULT_TR;
-  document.getElementById('template_en').value = DEFAULT_EN;
-  document.getElementById('hashtags').value = (CFG.hashtags && CFG.hashtags.length)
-    ? CFG.hashtags.join(', ')
-    : 'yemektarifi, evyemekleri, günlükvlog, kombin, makyaj, spormotivasyon, gymtok, gezilecekyerler, bilgipaylaşımı, küçükişletme';
-  if (CFG.countries) document.getElementById('countries').value = CFG.countries.join(', ');
+  // Dile göre niş hashtag çipleri
+  const NICHE_CHIPS = {
+    tr: { '🍽️ Yemek':['yemektarifi','evyemekleri','tarifpaylaşımı'], '📹 Vlog':['günlükvlog','vloglife'],
+          '💄 Moda':['kombin','makyaj','ciltbakımı'], '💪 Fitness':['spormotivasyon','gymtok'],
+          '✈️ Gezi':['gezilecekyerler','seyahat'], '🧠 Bilgi':['bilgipaylaşımı','kişiselgelişim'] },
+    en: { '🍽️ Food':['foodtiktok','recipe','easyrecipes'], '📹 Vlog':['dailyvlog','vlog','dayinmylife'],
+          '💄 Fashion':['ootd','styletips','fashiontiktok'], '💪 Fitness':['gymtok','fittok','workout'],
+          '✈️ Travel':['traveltok','wanderlust'], '🧠 Info':['learnontiktok','tips','didyouknow'] },
+    es: { '🍽️ Comida':['recetas','comida','cocina'], '📹 Vlog':['vlogdiario','vlog'],
+          '💄 Moda':['moda','belleza','outfit'], '💪 Fitness':['gimnasio','entrenamiento'],
+          '✈️ Viajes':['viajes','turismo'], '🧠 Info':['aprende','consejos'] },
+    de: { '🍽️ Essen':['rezepte','essen','kochen'], '📹 Vlog':['vlog','alltag'],
+          '💄 Mode':['mode','beauty','outfit'], '💪 Fitness':['fitness','training'],
+          '✈️ Reisen':['reisen','urlaub'], '🧠 Wissen':['lernen','tipps'] },
+    fr: { '🍽️ Cuisine':['recette','cuisine','food'], '📹 Vlog':['vlog','quotidien'],
+          '💄 Mode':['mode','beaute','outfit'], '💪 Fitness':['musculation','sport'],
+          '✈️ Voyage':['voyage','tourisme'], '🧠 Info':['apprendresurtiktok','astuces'] },
+    ar: { '🍽️ طعام':['وصفات','طبخ','اكل'], '📹 فلوق':['فلوق','يوميات'],
+          '💄 موضة':['موضة','مكياج','عناية'], '💪 لياقة':['رياضة','تمارين'],
+          '✈️ سفر':['سفر','سياحة'], '🧠 معلومات':['معلومات','نصائح'] },
+  };
+
+  const DEFAULT_HASHTAGS = {
+    tr:'yemektarifi, evyemekleri, günlükvlog, kombin, makyaj, spormotivasyon, gymtok, gezilecekyerler, bilgipaylaşımı',
+    en:'foodtiktok, recipe, dailyvlog, ootd, styletips, gymtok, fittok, traveltok, learnontiktok',
+    es:'recetas, comida, vlogdiario, moda, belleza, gimnasio, viajes, aprende',
+    de:'rezepte, essen, vlog, mode, beauty, fitness, reisen, lernen',
+    fr:'recette, cuisine, vlog, mode, beaute, musculation, voyage, astuces',
+    ar:'وصفات, طبخ, فلوق, موضة, مكياج, رياضة, سفر, معلومات',
+  };
+
+  const selectedCountries = new Set();
+
+  // --- Ön-doldur ---
+  if (CFG.apify_token && !String(CFG.apify_token).includes('YAPISTIR')) document.getElementById('apify_token').value = CFG.apify_token;
   if (CFG.min_followers) document.getElementById('min_followers').value = CFG.min_followers;
   if (CFG.max_followers) document.getElementById('max_followers').value = CFG.max_followers;
   if (CFG.target_count) document.getElementById('target').value = CFG.target_count;
-  if (CFG.apify_token && !String(CFG.apify_token).includes('YAPISTIR')) {
-    document.getElementById('apify_token').value = CFG.apify_token;
-  }
+  document.getElementById('hashtags').value = (CFG.hashtags && CFG.hashtags.length) ? CFG.hashtags.join(', ') : DEFAULT_HASHTAGS.tr;
 
-  // Niş çiplerini oluştur
-  (function buildChips() {
-    const box = document.getElementById('hashtagChips');
-    box.innerHTML = Object.keys(NICHE_CHIPS).map(k =>
-      '<span class="chip" onclick="addNiche(\'' + k.replace(/'/g, "\\'") + '\')">' + k + '</span>'
+  // Ülke butonları
+  (function buildCountries(){
+    const box = document.getElementById('countryBtns');
+    box.innerHTML = Object.keys(COUNTRIES).map(k =>
+      '<div class="cbtn" id="c-'+k+'" onclick="toggleCountry(\''+k+'\')">'+COUNTRIES[k].label+'</div>'
     ).join('');
   })();
 
-  function addNiche(key) {
-    const tags = NICHE_CHIPS[key] || [];
+  function toggleCountry(k){
+    const el = document.getElementById('c-'+k);
+    if (selectedCountries.has(k)) { selectedCountries.delete(k); el.classList.remove('on'); }
+    else { selectedCountries.add(k); el.classList.add('on'); }
+    // Seçilen dile göre çipleri ve şablon sekmesini güncelle
+    const first = selectedCountries.values().next().value;
+    if (first) { buildChips(first); switchTpl(first); }
+    else buildChips('tr');
+  }
+
+  // Niş çipleri (dile göre)
+  function buildChips(lang){
+    const map = NICHE_CHIPS[lang] || NICHE_CHIPS.tr;
+    const box = document.getElementById('hashtagChips');
+    box.innerHTML = Object.keys(map).map(k =>
+      '<span class="chip" onclick="addNiche(\''+lang+'\',\''+k.replace(/'/g,"\\'")+'\')">'+k+'</span>'
+    ).join('');
+  }
+  buildChips('tr');
+
+  function addNiche(lang, key){
+    const tags = (NICHE_CHIPS[lang]||{})[key] || [];
     const el = document.getElementById('hashtags');
-    const existing = new Set(el.value.split(',').map(s => s.trim().replace(/^#/, '')).filter(Boolean));
-    tags.forEach(t => existing.add(t));
+    const existing = new Set(el.value.split(',').map(s=>s.trim().replace(/^#/,'')).filter(Boolean));
+    tags.forEach(t=>existing.add(t));
     el.value = Array.from(existing).join(', ');
   }
 
-  function switchTab(which) {
-    const tr = which === 'tr';
-    document.getElementById('template_tr').style.display = tr ? 'block' : 'none';
-    document.getElementById('template_en').style.display = tr ? 'none' : 'block';
-    document.getElementById('tab-tr').classList.toggle('active', tr);
-    document.getElementById('tab-en').classList.toggle('active', !tr);
+  // Şablon sekmeleri (6 dil)
+  (function buildTpl(){
+    const tabs = document.getElementById('tplTabs');
+    const boxes = document.getElementById('tplBoxes');
+    tabs.innerHTML = LANGS.map(l =>
+      '<div class="tab'+(l==='tr'?' active':'')+'" id="tt-'+l+'" onclick="switchTpl(\''+l+'\')">'+COUNTRIES[l].label+'</div>'
+    ).join('');
+    boxes.innerHTML = LANGS.map(l =>
+      '<textarea id="tpl-'+l+'" rows="10" style="display:'+(l==='tr'?'block':'none')+'">'+ (TEMPLATES[l]||'').replace(/</g,'&lt;') +'</textarea>'
+    ).join('');
+  })();
+
+  function switchTpl(l){
+    activeTpl = l;
+    LANGS.forEach(x=>{
+      document.getElementById('tpl-'+x).style.display = (x===l)?'block':'none';
+      document.getElementById('tt-'+x).classList.toggle('active', x===l);
+    });
   }
 
-  function setStatus(msg, isErr) {
-    const el = document.getElementById('status');
-    el.textContent = msg;
-    el.className = 'status' + (isErr ? ' err' : '');
-  }
+  function setStatus(msg,isErr){ const el=document.getElementById('status'); el.textContent=msg; el.className='status'+(isErr?' err':''); }
 
-  async function runSearch() {
+  async function runSearch(){
     const btn = document.getElementById('searchBtn');
-    const hashtags = document.getElementById('hashtags').value.split(',').map(s => s.trim().replace(/^#/, '')).filter(Boolean);
-    const countries = document.getElementById('countries').value.split(',').map(s => s.trim()).filter(Boolean);
+    const hashtags = document.getElementById('hashtags').value.split(',').map(s=>s.trim().replace(/^#/,'')).filter(Boolean);
     const token = document.getElementById('apify_token').value.trim();
+    const countries = Array.from(selectedCountries).map(k=>COUNTRIES[k].iso);
 
-    if (!token) { setStatus('Apify API token gir.', true); return; }
-    if (!hashtags.length) { setStatus('En az bir hashtag gir.', true); return; }
+    if (!token){ setStatus('Apify API token gir.',true); return; }
+    if (!hashtags.length){ setStatus('En az bir hashtag gir.',true); return; }
+
+    const templates = {};
+    LANGS.forEach(l => { templates[l] = document.getElementById('tpl-'+l).value; });
 
     const payload = {
-      apify_token: token, hashtags, countries,
-      min_followers: Number(document.getElementById('min_followers').value) || 3000,
-      max_followers: Number(document.getElementById('max_followers').value) || 80000,
-      target_count: Number(document.getElementById('target').value) || 100,
-      template_tr: document.getElementById('template_tr').value,
-      template_en: document.getElementById('template_en').value,
+      apify_token:token, hashtags, countries,
+      min_followers:Number(document.getElementById('min_followers').value)||3000,
+      max_followers:Number(document.getElementById('max_followers').value)||80000,
+      target_count:Number(document.getElementById('target').value)||100,
+      templates,
     };
 
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Taranıyor...';
-    setStatus('Apify üzerinden aranıyor, bu birkaç dakika sürebilir...');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Taranıyor...';
+    setStatus('Apify üzerinden aranıyor, birkaç dakika sürebilir...');
 
     try {
-      const res = await fetch('/api/search', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
-      });
+      const res = await fetch('/api/search',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
       const data = await res.json();
-      if (!data.ok) throw new Error(data.error || 'Bilinmeyen hata');
-      CREATORS = data.creators;
-      render();
-      setStatus('Tamam! ' + data.count + ' üretici bulundu.');
-    } catch (e) {
-      setStatus('Hata: ' + e.message, true);
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = '🚀 Üreticileri Bul';
-    }
+      if (!data.ok) throw new Error(data.error||'Bilinmeyen hata');
+      CREATORS = data.creators; render();
+      setStatus('Tamam! '+data.count+' üretici bulundu.');
+    } catch(e){ setStatus('Hata: '+e.message,true); }
+    finally { btn.disabled=false; btn.innerHTML='🚀 Üreticileri Bul'; }
   }
 
-  function render() {
-    const wrap = document.getElementById('results');
-    const empty = document.getElementById('empty');
-    document.getElementById('countPill').textContent = CREATORS.length + ' kişi';
-    document.getElementById('csvBtn').disabled = CREATORS.length === 0;
-
-    if (!CREATORS.length) { empty.style.display = 'block'; wrap.innerHTML = ''; return; }
-    empty.style.display = 'none';
-
-    wrap.innerHTML = CREATORS.map((c, i) =>
-      '<div class="creator">' +
-        '<div class="creator-head">' +
-          '<div>' +
-            '<div class="creator-name">' + escapeHtml(c.nickname || c.username) + '</div>' +
-            '<div class="creator-sub">@' + escapeHtml(c.username) + (c.country ? ' · ' + escapeHtml(c.country) : '') + '</div>' +
-          '</div>' +
-          '<div class="badges">' +
-            '<span class="badge">' + formatNum(c.followers) + ' takipçi</span>' +
-            '<span class="badge lang">' + escapeHtml(c.lang || 'en') + '</span>' +
-          '</div>' +
-        '</div>' +
-        '<div class="dm" id="dm-' + i + '">' + escapeHtml(c.message) + '</div>' +
-        '<div class="creator-actions">' +
-          '<button class="btn small" onclick="sendDm(' + i + ', this)">💬 DM At (Kopyala + Aç)</button>' +
-          '<button class="btn small secondary" onclick="copyDm(' + i + ', this)">📋 Kopyala</button>' +
-        '</div>' +
-      '</div>'
-    ).join('');
+  function visibleList(){
+    const q = document.getElementById('searchBox').value.trim().toLowerCase();
+    let list = CREATORS.filter(c => !q || (c.nickname||'').toLowerCase().includes(q) || (c.username||'').toLowerCase().includes(q));
+    const sort = document.getElementById('sortBy').value;
+    if (sort==='followers_desc') list.sort((a,b)=>b.followers-a.followers);
+    else if (sort==='followers_asc') list.sort((a,b)=>a.followers-b.followers);
+    else if (sort==='name') list.sort((a,b)=>(a.nickname||a.username).localeCompare(b.nickname||b.username));
+    return list;
   }
 
-  function sendDm(i, btn) {
-    const c = CREATORS[i];
-    navigator.clipboard.writeText(c.message).then(() => {
-      const orig = btn.innerHTML;
-      btn.innerHTML = '✅ Kopyalandı, profil açılıyor';
-      btn.classList.add('copied');
-      window.open(c.profile, '_blank', 'noopener');
-      setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('copied'); }, 2000);
-    });
+  function render(){
+    const wrap=document.getElementById('results'); const empty=document.getElementById('empty');
+    const list = visibleList();
+    document.getElementById('countPill').textContent = CREATORS.length+' kişi';
+    document.getElementById('csvBtn').disabled = CREATORS.length===0;
+    document.getElementById('copyAllBtn').disabled = CREATORS.length===0;
+    if (!list.length){ empty.style.display='block'; wrap.innerHTML=''; return; }
+    empty.style.display='none';
+    wrap.innerHTML = list.map((c) => {
+      const gi = CREATORS.indexOf(c);
+      return '<div class="creator">'+
+        '<div class="creator-head"><div>'+
+          '<div class="creator-name">'+escapeHtml(c.nickname||c.username)+'</div>'+
+          '<div class="creator-sub">@'+escapeHtml(c.username)+(c.country?' · '+escapeHtml(c.country):'')+'</div>'+
+        '</div><div class="badges">'+
+          '<span class="badge">'+formatNum(c.followers)+' takipçi</span>'+
+          '<span class="badge lang">'+escapeHtml(c.lang||'en')+'</span>'+
+        '</div></div>'+
+        '<div class="dm">'+escapeHtml(c.message)+'</div>'+
+        '<div class="creator-actions">'+
+          '<button class="btn small" onclick="sendDm('+gi+',this)">💬 DM At (Kopyala + Aç)</button>'+
+          '<button class="btn small secondary" onclick="copyDm('+gi+',this)">📋 Kopyala</button>'+
+        '</div></div>';
+    }).join('');
   }
 
-  function copyDm(i, btn) {
-    navigator.clipboard.writeText(CREATORS[i].message).then(() => {
-      const orig = btn.innerHTML;
-      btn.innerHTML = '✅ Kopyalandı';
-      btn.classList.add('copied');
-      setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('copied'); }, 1500);
-    });
+  function sendDm(i,btn){ const c=CREATORS[i]; navigator.clipboard.writeText(c.message).then(()=>{ const o=btn.innerHTML; btn.innerHTML='✅ Kopyalandı, profil açılıyor'; btn.classList.add('copied'); window.open(c.profile,'_blank','noopener'); setTimeout(()=>{btn.innerHTML=o;btn.classList.remove('copied');},2000); }); }
+  function copyDm(i,btn){ navigator.clipboard.writeText(CREATORS[i].message).then(()=>{ const o=btn.innerHTML; btn.innerHTML='✅ Kopyalandı'; btn.classList.add('copied'); setTimeout(()=>{btn.innerHTML=o;btn.classList.remove('copied');},1500); }); }
+  function copyAll(){ const txt = CREATORS.map(c=>'@'+c.username+'\n'+c.message).join('\n\n----------\n\n'); navigator.clipboard.writeText(txt).then(()=>setStatus('Tüm DM'+"'"+'ler panoya kopyalandı ('+CREATORS.length+' kişi).')); }
+
+  function downloadCsv(){
+    const header=['username','nickname','followers','country','lang','email','bio','profile'];
+    const lines=[header.join(',')];
+    CREATORS.forEach(c=>{ lines.push([c.username,'"'+(c.nickname||'').replace(/"/g,'""')+'"',c.followers,c.country||'',c.lang||'',c.email||'','"'+(c.bio||'').replace(/"/g,'""').replace(/\n/g,' ')+'"',c.profile].join(',')); });
+    const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='creators.csv'; a.click();
   }
 
-  function downloadCsv() {
-    const header = ['username','nickname','followers','country','lang','email','bio','profile'];
-    const lines = [header.join(',')];
-    CREATORS.forEach(c => {
-      lines.push([c.username, '"'+(c.nickname||'').replace(/"/g,'""')+'"', c.followers, c.country||'', c.lang||'',
-        c.email||'', '"'+(c.bio||'').replace(/"/g,'""').replace(/\n/g,' ')+'"', c.profile].join(','));
-    });
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = 'creators.csv'; a.click();
-  }
-
-  function escapeHtml(s) {
-    return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-  }
-  function formatNum(n) {
-    n = Number(n) || 0;
-    if (n >= 1000) return (n/1000).toFixed(1).replace('.0','') + 'K';
-    return String(n);
-  }
+  function escapeHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+  function formatNum(n){ n=Number(n)||0; if(n>=1000) return (n/1000).toFixed(1).replace('.0','')+'K'; return String(n); }
 </script>
 </body>
 </html>
