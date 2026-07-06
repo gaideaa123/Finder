@@ -91,7 +91,9 @@ def _run_search(data):
         "target_count": data.get("target_count", 60),
         "require_email": bool(data.get("require_email", False)),
         "strict_country": bool(data.get("strict_country", True)),
-        "skip_seen": True,
+        # TEK HAFIZA: finder kendi seen_history'sini kullanmasin; dedup CRM'de.
+        # Boylece Database'den 'Sil'/'Tekrar Bul' gercekten etki eder.
+        "skip_seen": False,
     }
     last = ""
     for tok in tokens:
@@ -149,7 +151,6 @@ def api_keys():
             val = [t.strip() for t in val.replace("\n", ",").split(",") if t.strip()]
         if isinstance(val, list):
             STATE[key] = [t.strip() for t in val if t and t.strip()]
-    # Groq test
     ai_ok, ai_err = False, ""
     b = _brain()
     if b:
@@ -198,7 +199,6 @@ def _start_email():
 
 
 def _auto_loop(data):
-    """Bul -> email at -> email bitince tekrar bul. Hedefe/durdurulana kadar."""
     STATE["auto"] = {"running": True, "found": 0, "rounds": 0, "last": "baslatildi", "stop": False}
     try:
         while not STATE["auto"]["stop"]:
@@ -210,13 +210,11 @@ def _auto_loop(data):
             STATE["auto"]["found"] += len(fresh)
             STATE["auto"]["rounds"] += 1
             STATE["auto"]["last"] = f"{len(fresh)} yeni bulundu, email atiliyor..."
-            # Email kampanyasi (bu tur icin), bitene kadar bekle
             _start_email()
             while email_status().get("running"):
                 if STATE["auto"]["stop"]:
                     break
                 time.sleep(3)
-            # Yeni kisi gelmediyse dur (hashtag'ler tukenmis)
             if len(fresh) == 0:
                 STATE["auto"]["last"] = "Yeni kisi kalmadi, durdu."
                 break
@@ -299,7 +297,6 @@ def api_stats():
     return jsonify({"ok": True, "stats": s})
 
 
-# --- DATABASE yonetimi ---
 @app.route("/api/db")
 def api_db():
     return jsonify({"ok": True, "rows": crm.list_contacts(
@@ -338,7 +335,6 @@ def api_update():
     return jsonify({"ok": True})
 
 
-# --- Manuel email kampanyasi (Auto disinda) ---
 @app.route("/api/email/start", methods=["POST"])
 def api_email_start():
     return jsonify(_start_email())
