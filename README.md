@@ -1,7 +1,8 @@
 # CaptionAI İçerik Üretici Bulucu 🔎
 
 TikTok'ta hashtag'lerden içerik üreticisi bulur, takipçi bandı + etkileşim
-oranına göre filtreler ve DM atman için kullanıcı adlarını bir CSV'ye döker.
+oranına göre filtreler ve **her biri için kişiye özel DM'i hazır** verir.
+Şık bir web arayüzünde: tek tıkla kopyala + profile git.
 
 > Neden e-posta değil? Creator'lara izinsiz toplu soğuk mail atmak KVKK/GDPR'a
 > aykırı ve domain'ini spam'e düşürür. DM hem yasal hem 10 kat daha etkili.
@@ -21,18 +22,35 @@ TikTok'un web'i imzalı bir `msToken` çerezi ister. Almak için:
 2. `F12` ile geliştirici araçlarını aç.
 3. **Application** (Uygulama) sekmesi → sol menüde **Cookies** → `https://www.tiktok.com`.
 4. Listede **`msToken`** satırını bul, değerini kopyala.
-5. `config.example.json`'u `config.json` olarak kopyala ve `ms_token` alanına yapıştır.
+5. Web arayüzünde "msToken" alanına yapıştır (veya `config.json`'a).
 
-> msToken zamanla geçersiz olur; script çalışmazsa yeni bir tane al.
+> msToken zamanla geçersiz olur; çalışmazsa yeni bir tane al.
 
-## Çalıştır
+## Kullanım — Web Arayüzü (önerilen) 🖥️
+
+```bash
+python app.py
+```
+
+Sonra tarayıcıda aç: **http://127.0.0.1:5000**
+
+Arayüzde:
+- Soldan hashtag'leri, takipçi bandını, etkileşim eşiğini ve msToken'ı gir.
+- DM şablonunu düzenle (`{name}` her creator'ın adıyla otomatik dolar).
+- **Üreticileri Bul**'a bas.
+- Sağda her creator bir kart olur: adı, takipçi, etkileşim, **kişiye özel DM**,
+  **📋 Kopyala** ve **👤 Profile Git** butonları.
+- İstersen tüm listeyi **CSV İndir** ile dışa aktar.
+
+## Kullanım — Terminal (alternatif)
+
+`config.example.json`'u `config.json` yap, düzenle, sonra:
 
 ```bash
 python finder.py
 ```
 
-Bitince `creators.csv` oluşur: `username, followers, engagement_rate, profile, hashtag`.
-En yüksek etkileşimden düşüğe sıralı gelir, en tepedekiler öncelikli DM hedeflerin.
+Çıktı: `creators.csv` (`username, nickname, followers, engagement_rate, profile, hashtag`).
 
 ## Ayarlar (`config.json`)
 
@@ -58,4 +76,5 @@ En yüksek etkileşimden düşüğe sıralı gelir, en tepedekiler öncelikli DM
 - Bu araç TikTok'un web arayüzünü otomatize eder; TikTok yapısını değiştirirse
   güncelleme gerekebilir. Çalışmazsa önce `msToken`'ı yenile.
 - Hesabını korumak için makul sayıda veri çek, aşırıya kaçma.
-- Topladığın verileri sadece kişisel, kişiye özel DM için kullan.
+- Topladığın verileri sadece kişisel, kişiye özel DM için kullan, toplu spam'e
+  dönüştürme.
