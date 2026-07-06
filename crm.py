@@ -1,24 +1,6 @@
-"""
-CaptionAI Finder - CRM (SQLite, kalıcı)
-=======================================
-
-Tüm creator'ları ve outreach durumlarını kalıcı tutar. AI öğrenmesi ve yanıt
-oranı analizi bu verinin üstünde çalışır.
-
-Tablolar:
-  contacts(username PK, nickname, followers, lang, country, email, bio, bio_link,
-           profile, channel, status, message, reply_text, sentiment, category,
-           created_at, sent_at, replied_at)
-
-Durumlar (status):
-  queued   -> kuyrukta, henüz gönderilmedi
-  sent     -> DM/email gönderildi
-  replied  -> yanıt geldi
-  skipped  -> elle atlandı / silindi
-"""
+"""CaptionAI Finder - CRM (SQLite, kalici)."""
 
 import sqlite3
-import time
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
@@ -41,9 +23,15 @@ def init_db() -> None:
                 channel TEXT DEFAULT 'dm',
                 status TEXT DEFAULT 'queued',
                 message TEXT, reply_text TEXT, sentiment TEXT, category TEXT,
+                sent_account TEXT,
                 created_at TEXT, sent_at TEXT, replied_at TEXT
             )"""
         )
+        # Eski DB'ye sent_account kolonu ekle (varsa gec)
+        try:
+            c.execute("ALTER TABLE contacts ADD COLUMN sent_account TEXT")
+        except Exception:
+            pass
         c.commit()
 
 
@@ -58,15 +46,13 @@ def known_usernames() -> set:
 
 
 def upsert_contacts(creators: List[dict]) -> int:
-    """Yeni creator'ları kuyruğa ekler (varsa dokunmaz). Eklenen sayıyı döner."""
     added = 0
     with _conn() as c:
         for cr in creators:
             u = (cr.get("username") or "").strip()
             if not u:
                 continue
-            exists = c.execute("SELECT 1 FROM contacts WHERE username=?", (u,)).fetchone()
-            if exists:
+            if c.execute("SELECT 1 FROM contacts WHERE username=?", (u,)).fetchone():
                 continue
             c.execute(
                 """INSERT INTO contacts
@@ -87,9 +73,10 @@ def upsert_contacts(creators: List[dict]) -> int:
 def get_queue(channel: Optional[str] = None, limit: int = 200) -> List[dict]:
     q = "SELECT * FROM contacts WHERE status='queued'"
     args: list = []
-    if channel:
-        q += " AND channel=?"
-        args.append(channel)
+    if channel == "email":
+        q += " AND email IS NOT NULL AND email<>''"
+    elif channel == "dm":
+        pass  # DM kuyrugu: herkes (email olsa da DM atilabilir)
     q += " ORDER BY followers DESC LIMIT ?"
     args.append(limit)
     with _conn() as c:
@@ -102,19 +89,23 @@ def set_message(username: str, message: str) -> None:
         c.commit()
 
 
-def mark_sent(username: str, channel: str = "dm") -> None:
+def mark_sent(username: str, channel: str = "dm", account: str = "") -> None:
     with _conn() as c:
-        c.execute("UPDATE contacts SET status='sent', channel=?, sent_at=? WHERE username=?",
-                  (channel, _now(), username))
+        c.execute("UPDATE contacts SET status='sent', channel=?, sent_account=?, sent_at=? WHERE username=?",
+                  (channel, account, _now(), username))
         c.commit()
+
+
+def is_emailed(username: str) -> bool:
+    with _conn() as c:
+        r = c.execute("SELECT status, channel FROM contacts WHERE username=?", (username,)).fetchone()
+    return bool(r and r["status"] in ("sent", "replied") and r["channel"] == "email")
 
 
 def mark_replied(username: str, reply_text: str, sentiment: str = "", category: str = "") -> None:
     with _conn() as c:
-        c.execute(
-            "UPDATE contacts SET status='replied', reply_text=?, sentiment=?, category=?, replied_at=? WHERE username=?",
-            (reply_text, sentiment, category, _now(), username),
-        )
+        c.execute("UPDATE contacts SET status='replied', reply_text=?, sentiment=?, category=?, replied_at=? WHERE username=?",
+                  (reply_text, sentiment, category, _now(), username))
         c.commit()
 
 
@@ -135,44 +126,26 @@ def sent_today(channel: Optional[str] = None) -> int:
         return c.execute(q, args).fetchone()["n"]
 
 
+def sent_today_by_account(account: str) -> int:
+    today = datetime.now(timezone.utc).date().isoformat()
+    with _conn() as c:
+        return c.execute(
+            "SELECT COUNT(*) n FROM contacts WHERE channel='email' AND sent_account=? AND sent_at LIKE ?",
+            (account, today + "%"),
+        ).fetchone()["n"]
+
+
 def stats() -> dict:
     with _conn() as c:
         total = c.execute("SELECT COUNT(*) n FROM contacts").fetchone()["n"]
         sent = c.execute("SELECT COUNT(*) n FROM contacts WHERE status IN ('sent','replied')").fetchone()["n"]
         replied = c.execute("SELECT COUNT(*) n FROM contacts WHERE status='replied'").fetchone()["n"]
         queued = c.execute("SELECT COUNT(*) n FROM contacts WHERE status='queued'").fetchone()["n"]
-        pos = c.execute("SELECT COUNT(*) n FROM contacts WHERE sentiment='pos'").fetchone()["n"]
-        by_lang = c.execute(
-            """SELECT lang,
-                      SUM(CASE WHEN status IN ('sent','replied') THEN 1 ELSE 0 END) sent,
-                      SUM(CASE WHEN status='replied' THEN 1 ELSE 0 END) replied
-               FROM contacts GROUP BY lang"""
-        ).fetchall()
-        repliers = c.execute(
-            "SELECT username, nickname, lang, reply_text, sentiment, category FROM contacts WHERE status='replied' ORDER BY replied_at DESC LIMIT 50"
-        ).fetchall()
+        emailed = c.execute("SELECT COUNT(*) n FROM contacts WHERE channel='email' AND status IN ('sent','replied')").fetchone()["n"]
+        with_email = c.execute("SELECT COUNT(*) n FROM contacts WHERE email IS NOT NULL AND email<>''").fetchone()["n"]
     reply_rate = round((replied / sent) * 100, 1) if sent else 0.0
-    return {
-        "total": total, "sent": sent, "replied": replied, "queued": queued,
-        "positive": pos, "reply_rate": reply_rate,
-        "by_lang": [dict(r) for r in by_lang],
-        "repliers": [dict(r) for r in repliers],
-    }
-
-
-def learning_samples(limit: int = 60) -> List[dict]:
-    """AI öğrenmesi için: gönderilmiş mesaj + yanıt geldi mi + duygu."""
-    with _conn() as c:
-        rows = c.execute(
-            """SELECT message, status, sentiment FROM contacts
-               WHERE status IN ('sent','replied') AND message IS NOT NULL AND message<>''
-               ORDER BY sent_at DESC LIMIT ?""",
-            (limit,),
-        ).fetchall()
-    return [
-        {"message": r["message"], "replied": r["status"] == "replied", "sentiment": r["sentiment"] or ""}
-        for r in rows
-    ]
+    return {"total": total, "sent": sent, "replied": replied, "queued": queued,
+            "emailed": emailed, "with_email": with_email, "reply_rate": reply_rate}
 
 
 def all_contacts(status: Optional[str] = None) -> List[dict]:
