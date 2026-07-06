@@ -3,24 +3,24 @@ CaptionAI - İçerik Üretici Bulucu (Apify tabanlı)
 =================================================
 
 Actor: paxiq/tiktok-influencer-scraper
-Gerçek input alanları: hashtags, min_followers, max_followers (0=limitsiz),
-max_results, extract_emails, follow_bio_links, require_email, country_hint.
-Gerçek çıktı alanları: handle, display_name, first_name, followers, bio,
-email, bio_link, profile_url, hashtag_source.
+Input: hashtags, min_followers, max_followers (0=limitsiz), max_results,
+       extract_emails, follow_bio_links, require_email, country_hint.
+Çıktı: handle, display_name, followers, bio, email, bio_link, profile_url.
 
-Neden Apify? TikTok kazımayı bilerek engelliyor (msToken saniyede değişiyor).
-Asenkron çalıştırıp yokluyoruz -> 300s senkron limitine (408) takılmaz.
+Özellikler: 6 dilli tespit, sıkı ülke filtresi, kalıcı geçmiş (tekrar bulmaz),
+email çıkarımı. Asenkron çalıştırma -> 300s (408) limitine takılmaz.
 """
 
 import json
 import os
 import re
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 import requests
 
 APIFY_BASE = "https://api.apify.com/v2"
+HISTORY_FILE = "seen_history.json"
 
 SUPPORTED_LANGS = ["tr", "en", "es", "de", "fr", "ar"]
 
@@ -57,11 +57,12 @@ TURKISH_CHARS = set("ışğüöçİ")
 GERMAN_CHARS = set("äöüß")
 SPANISH_CHARS = set("ñ¿¡")
 ARABIC_RE = re.compile(r"[\u0600-\u06FF]")
+EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
 
 LANG_WORDS = {
     "tr": {"ve", "bir", "için", "ile", "çok", "video", "takip", "içerik", "tarif",
            "yemek", "moda", "gezi", "seyahat", "spor", "eğlence", "kanal", "abone",
-           "merhaba", "selam", "türkiye", "türk", "hayat", "günlük", "öğrenci", "anne"},
+           "merhaba", "selam", "türkiye", "türk", "hayat", "günlük", "öğrenci", "anne", "iletişim"},
     "es": {"el", "la", "los", "las", "para", "con", "por", "vida", "amor", "videos",
            "hola", "gracias", "contenido", "receta", "comida", "viaje", "moda", "belleza"},
     "de": {"und", "der", "die", "das", "für", "mit", "ich", "leben", "video", "kanal",
@@ -69,6 +70,27 @@ LANG_WORDS = {
     "fr": {"le", "la", "les", "pour", "avec", "et", "vie", "vidéo", "bonjour", "merci",
            "recette", "cuisine", "voyage", "mode", "beauté", "quotidien"},
 }
+
+
+# --- Kalıcı geçmiş (daha önce bulunanları tekrar bulma) ------------------
+
+def load_history() -> Set[str]:
+    try:
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return set(data.get("seen", []))
+    except Exception:
+        return set()
+
+
+def add_to_history(usernames: List[str]) -> None:
+    seen = load_history()
+    seen.update(u.lower() for u in usernames if u)
+    try:
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump({"seen": sorted(seen)}, f, ensure_ascii=False, indent=0)
+    except Exception:
+        pass
 
 
 def country_to_iso(value: str) -> Optional[str]:
@@ -133,8 +155,6 @@ def _first(d: dict, keys: List[str], default=None):
 
 
 def normalize_item(item: dict) -> Optional[dict]:
-    # Actor çıktısı: handle, display_name, first_name, followers, bio, email,
-    # bio_link, profile_url, hashtag_source. (Diğer actor'lar için de esnek.)
     username = _first(
         item,
         ["handle", "username", "uniqueId", "userName", "authorMeta.name", "author.uniqueId"],
@@ -159,16 +179,22 @@ def normalize_item(item: dict) -> Optional[dict]:
         followers = 0
 
     bio = _first(item, ["bio", "signature", "authorMeta.signature", "description"], default="")
+    bio_link = _first(item, ["bio_link", "bioLink", "bioLink.link"], default="")
+
+    # Email: actor alanı YA DA bio metninden regex.
     email = _first(item, ["email", "authorMeta.email"], default="")
+    if not email and bio:
+        m = EMAIL_RE.search(bio)
+        if m:
+            email = m.group(0)
+
     profile = _first(item, ["profile_url", "profileUrl"], default=f"https://www.tiktok.com/@{username}")
 
-    # country_hint input'tan pass-through (güvenilir değil), yine de oku.
     country_raw = _first(
         item, ["country_hint", "country", "region", "countryCode", "authorMeta.region"], default=""
     )
     iso = country_to_iso(country_raw)
 
-    # Dil: metin bazlı çıkarım (bio + isim)
     text_blob = f"{nickname} {bio}"
     detected = detect_lang_from_text(text_blob)
 
@@ -184,6 +210,7 @@ def normalize_item(item: dict) -> Optional[dict]:
         "followers": followers,
         "bio": bio or "",
         "email": email or "",
+        "bio_link": bio_link or "",
         "country": iso or "",
         "lang": lang,
         "detected_lang": detected or "",
@@ -215,6 +242,9 @@ def find_creators(cfg: dict) -> List[dict]:
     min_f = int(cfg.get("min_followers", 3000))
     max_f = int(cfg.get("max_followers", 80000))
     target = int(cfg.get("target_count", 100))
+    require_email = bool(cfg.get("require_email", False))
+    strict_country = bool(cfg.get("strict_country", True))  # varsayılan: sıkı
+    skip_seen = bool(cfg.get("skip_seen", True))
 
     wanted = set()
     for c in cfg.get("countries", []) or []:
@@ -223,24 +253,26 @@ def find_creators(cfg: dict) -> List[dict]:
             wanted.add(iso)
     wanted_langs = {lang_for_country(iso) for iso in wanted}
 
-    # Actor'ın GERÇEK input alanları (şemadan).
-    max_results = max(int(target * 1.5), target + 20)
+    history = load_history() if skip_seen else set()
+
+    # Filtreler + geçmiş yüzünden daha çok aday çekmek gerekebilir.
+    max_results = max(int(target * 2.5), target + 40)
     actor_input = cfg.get("apify_input") or {
         "hashtags": hashtags,
         "min_followers": min_f,
-        "max_followers": max_f,  # 0 = limitsiz
+        "max_followers": max_f,
         "max_results": max_results,
         "extract_emails": True,
-        "follow_bio_links": False,  # hız için kapalı (bio link takibi yavaş)
+        "follow_bio_links": bool(require_email),  # email şartsa link takibi aç
     }
-    # country_hint tek string, kesin filtre değil; sadece ilk ülkeyi ipucu ver.
+    if require_email:
+        actor_input["require_email"] = True
     if wanted and "country_hint" not in actor_input:
         actor_input["country_hint"] = sorted(wanted)[0]
 
     poll_interval = float(cfg.get("poll_interval", 3))
     overall_timeout = float(cfg.get("overall_timeout", 240))
 
-    # 1) ASENKRON başlat
     run_url = f"{APIFY_BASE}/acts/{actor}/runs"
     r = requests.post(run_url, params={"token": token}, json=actor_input, timeout=30)
     if r.status_code >= 400:
@@ -251,50 +283,56 @@ def find_creators(cfg: dict) -> List[dict]:
     if not run_id or not dataset_id:
         raise RuntimeError("Apify run baslatilamadi (id yok).")
 
-    all_norm: Dict[str, dict] = {}   # tüm normalize kayıtlar (filtresiz yedek)
-    matched: Dict[str, dict] = {}    # ülke/dil filtresinden geçenler
+    matched: Dict[str, dict] = {}
     start = time.time()
+
+    def matches_country(rec: dict) -> bool:
+        if not wanted:
+            return True
+        lang_ok = rec["detected_lang"] in wanted_langs if rec["detected_lang"] else False
+        country_ok = rec["country"] in wanted if rec["country"] else False
+        if strict_country:
+            # SIKI: sinyal yoksa da ele (yabancı sızmasın). Sadece net eşleşme geçer.
+            return lang_ok or country_ok
+        # Gevşek: sinyal yoksa dahil et
+        if lang_ok or country_ok:
+            return True
+        return not (rec["country"] or rec["detected_lang"])
 
     def collect() -> None:
         for raw in _fetch_dataset(dataset_id, token, max_results):
             rec = normalize_item(raw)
-            if not rec or rec["username"] in all_norm:
+            if not rec or rec["username"] in matched:
                 continue
+            if skip_seen and rec["username"].lower() in history:
+                continue  # daha önce bulundu, atla
             f = rec["followers"]
             if f and (f < min_f or f > max_f):
                 continue
-            all_norm[rec["username"]] = rec
-            # Ülke/dil eşleşmesi
-            if wanted:
-                lang_ok = rec["detected_lang"] in wanted_langs if rec["detected_lang"] else False
-                country_ok = rec["country"] in wanted if rec["country"] else False
-                if lang_ok or country_ok:
-                    matched[rec["username"]] = rec
-            else:
-                matched[rec["username"]] = rec
+            if require_email and not rec["email"]:
+                continue
+            if not matches_country(rec):
+                continue
+            matched[rec["username"]] = rec
 
     status = run.get("status", "RUNNING")
     while True:
         time.sleep(poll_interval)
         collect()
-
         if len(matched) >= target:
             try:
                 requests.post(f"{APIFY_BASE}/actor-runs/{run_id}/abort", params={"token": token}, timeout=15)
             except Exception:
                 pass
             break
-
         try:
             sr = requests.get(f"{APIFY_BASE}/actor-runs/{run_id}", params={"token": token}, timeout=15)
             status = sr.json().get("data", {}).get("status", status)
         except Exception:
             pass
-
         if status in ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"):
             collect()
             break
-
         if time.time() - start > overall_timeout:
             try:
                 requests.post(f"{APIFY_BASE}/actor-runs/{run_id}/abort", params={"token": token}, timeout=15)
@@ -303,17 +341,18 @@ def find_creators(cfg: dict) -> List[dict]:
             collect()
             break
 
-    # Ülke filtresi seçiliydi ama hiç eşleşme yoksa: kullanıcıya boş ekran
-    # göstermek yerine filtresiz sonucu dön (dil tespiti actor verisine bağlı,
-    # her zaman tutmayabilir). Eşleşme varsa onları önceler.
-    pool = matched if matched else all_norm
-    rows = sorted(pool.values(), key=lambda r: r["followers"], reverse=True)
-    return rows[:target]
+    rows = sorted(matched.values(), key=lambda r: r["followers"], reverse=True)[:target]
+
+    # Bulunanları geçmişe ekle (bir daha getirmemek için)
+    if skip_seen and rows:
+        add_to_history([r["username"] for r in rows])
+
+    return rows
 
 
 def save_csv(rows: List[dict], out_csv: str) -> None:
     import csv
-    fields = ["username", "nickname", "followers", "country", "lang", "email", "bio", "profile"]
+    fields = ["username", "nickname", "followers", "country", "lang", "email", "bio_link", "bio", "profile"]
     with open(out_csv, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fields)
         writer.writeheader()
@@ -329,7 +368,8 @@ def _cli() -> None:
     save_csv(rows, out_csv)
     print(f"\n=== BITTI ===\n{len(rows)} uretici bulundu -> {out_csv}")
     for r in rows[:10]:
-        print(f"  @{r['username']}  {r['followers']} takipci  [{r['country'] or '?'} / {r['lang']}]")
+        em = r["email"] or "-"
+        print(f"  @{r['username']}  {r['followers']} takipci  [{r['country'] or '?'}/{r['lang']}]  {em}")
 
 
 if __name__ == "__main__":
