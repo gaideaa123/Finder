@@ -2,19 +2,14 @@
 CaptionAI - İçerik Üretici Bulucu (Apify tabanlı)
 =================================================
 
+Actor: paxiq/tiktok-influencer-scraper
+Gerçek input alanları: hashtags, min_followers, max_followers (0=limitsiz),
+max_results, extract_emails, follow_bio_links, require_email, country_hint.
+Gerçek çıktı alanları: handle, display_name, first_name, followers, bio,
+email, bio_link, profile_url, hashtag_source.
+
 Neden Apify? TikTok kazımayı bilerek engelliyor (msToken saniyede değişiyor).
-Apify bu savaşı bizim yerimize veriyor: sabit API token'ı ile hashtag'den
-creator listesi çekiyoruz. Native derleme (C++/greenlet) gerektirmez.
-
-Hem CLI (python finder.py) hem web GUI (app.py) bu dosyayı kullanır.
-Ana fonksiyon: find_creators(cfg) -> list[dict]
-
-HIZ / TIMEOUT NOTU
-------------------
-Apify'ın 'run-sync-get-dataset-items' endpoint'i 300 saniyede (408) kesiliyordu.
-Bunun yerine actor'ı asenkron başlatıp (POST /runs) durumunu yokluyoruz. Actor
-çalışırken dataset'e düşen item'ları da okuyoruz; istenen sayıya ulaşınca run'ı
-erkenden durdurup sonucu dönüyoruz (early stop = hız). Böylece 300s limiti yok.
+Asenkron çalıştırıp yokluyoruz -> 300s senkron limitine (408) takılmaz.
 """
 
 import json
@@ -29,7 +24,6 @@ APIFY_BASE = "https://api.apify.com/v2"
 
 SUPPORTED_LANGS = ["tr", "en", "es", "de", "fr", "ar"]
 
-# --- Ülke -> dil eşlemesi ------------------------------------------------
 COUNTRY_LANG = {
     "TR": "tr",
     "US": "en", "GB": "en", "CA": "en", "AU": "en", "IE": "en", "NZ": "en",
@@ -59,7 +53,6 @@ COUNTRY_NAME_TO_ISO = {
     "misir": "EG", "mısır": "EG", "egypt": "EG", "eg": "EG",
 }
 
-# --- Dil sinyalleri (metinden çıkarım) -----------------------------------
 TURKISH_CHARS = set("ışğüöçİ")
 GERMAN_CHARS = set("äöüß")
 SPANISH_CHARS = set("ñ¿¡")
@@ -68,7 +61,7 @@ ARABIC_RE = re.compile(r"[\u0600-\u06FF]")
 LANG_WORDS = {
     "tr": {"ve", "bir", "için", "ile", "çok", "video", "takip", "içerik", "tarif",
            "yemek", "moda", "gezi", "seyahat", "spor", "eğlence", "kanal", "abone",
-           "merhaba", "selam", "türkiye", "türk", "hayat", "günlük"},
+           "merhaba", "selam", "türkiye", "türk", "hayat", "günlük", "öğrenci", "anne"},
     "es": {"el", "la", "los", "las", "para", "con", "por", "vida", "amor", "videos",
            "hola", "gracias", "contenido", "receta", "comida", "viaje", "moda", "belleza"},
     "de": {"und", "der", "die", "das", "für", "mit", "ich", "leben", "video", "kanal",
@@ -140,9 +133,11 @@ def _first(d: dict, keys: List[str], default=None):
 
 
 def normalize_item(item: dict) -> Optional[dict]:
+    # Actor çıktısı: handle, display_name, first_name, followers, bio, email,
+    # bio_link, profile_url, hashtag_source. (Diğer actor'lar için de esnek.)
     username = _first(
         item,
-        ["username", "handle", "uniqueId", "authorMeta.name", "author.uniqueId", "userName"],
+        ["handle", "username", "uniqueId", "userName", "authorMeta.name", "author.uniqueId"],
     )
     if not username:
         return None
@@ -150,12 +145,12 @@ def normalize_item(item: dict) -> Optional[dict]:
 
     nickname = _first(
         item,
-        ["nickname", "name", "fullName", "authorMeta.nickName", "author.nickname", "displayName"],
+        ["display_name", "first_name", "nickname", "name", "fullName", "authorMeta.nickName"],
         default=username,
     )
     followers = _first(
         item,
-        ["followers", "followerCount", "fans", "authorMeta.fans", "authorStats.followerCount", "followersCount"],
+        ["followers", "followerCount", "fans", "authorMeta.fans", "authorStats.followerCount"],
         default=0,
     )
     try:
@@ -165,26 +160,21 @@ def normalize_item(item: dict) -> Optional[dict]:
 
     bio = _first(item, ["bio", "signature", "authorMeta.signature", "description"], default="")
     email = _first(item, ["email", "authorMeta.email"], default="")
+    profile = _first(item, ["profile_url", "profileUrl"], default=f"https://www.tiktok.com/@{username}")
 
+    # country_hint input'tan pass-through (güvenilir değil), yine de oku.
     country_raw = _first(
-        item,
-        ["country", "region", "countryCode", "authorMeta.region", "author.region", "location"],
-        default="",
+        item, ["country_hint", "country", "region", "countryCode", "authorMeta.region"], default=""
     )
     iso = country_to_iso(country_raw)
 
-    lang_raw = _first(item, ["language", "lang", "authorMeta.language"], default="")
-    lang = str(lang_raw).lower()[:2] if lang_raw else ""
-    if lang not in SUPPORTED_LANGS:
-        lang = ""
-
+    # Dil: metin bazlı çıkarım (bio + isim)
     text_blob = f"{nickname} {bio}"
     detected = detect_lang_from_text(text_blob)
 
     if not iso and detected:
         iso = LANG_MAIN_COUNTRY.get(detected)
-    if not lang:
-        lang = lang_for_country(iso) if iso else (detected or "en")
+    lang = lang_for_country(iso) if iso else (detected or "en")
     if lang not in SUPPORTED_LANGS:
         lang = "en"
 
@@ -197,29 +187,20 @@ def normalize_item(item: dict) -> Optional[dict]:
         "country": iso or "",
         "lang": lang,
         "detected_lang": detected or "",
-        "profile": f"https://www.tiktok.com/@{username}",
+        "profile": profile,
     }
 
 
-def _passes_filters(rec: dict, min_f: int, max_f: int, wanted: set, wanted_langs: set) -> bool:
-    f = rec["followers"]
-    if f and (f < min_f or f > max_f):
-        return False
-    if wanted:
-        country_ok = rec["country"] in wanted if rec["country"] else False
-        lang_ok = rec["detected_lang"] in wanted_langs if rec["detected_lang"] else False
-        if not (country_ok or lang_ok):
-            # Hiç sinyal yoksa dahil et; sinyal var ama eşleşmiyorsa ele.
-            if rec["country"] or rec["detected_lang"]:
-                return False
-    return True
+def _fetch_dataset(dataset_id: str, token: str, limit: int) -> List[dict]:
+    ds_url = f"{APIFY_BASE}/datasets/{dataset_id}/items"
+    resp = requests.get(ds_url, params={"token": token, "limit": limit}, timeout=60)
+    if resp.status_code >= 400:
+        return []
+    data = resp.json()
+    return data if isinstance(data, list) else []
 
 
 def find_creators(cfg: dict) -> List[dict]:
-    """
-    Apify actor'ını ASENKRON başlatır, çalışırken dataset'i yoklar, hedefe
-    ulaşınca run'ı durdurup sonucu döner. 300s senkron limitine takılmaz.
-    """
     token = cfg.get("apify_token", "")
     if not token or "YAPISTIR" in token:
         raise RuntimeError(
@@ -242,21 +223,24 @@ def find_creators(cfg: dict) -> List[dict]:
             wanted.add(iso)
     wanted_langs = {lang_for_country(iso) for iso in wanted}
 
-    # HIZ: hedefin ~1.5 katı kadar aday çek (eskiden 4x idi, çok yavaştı).
-    max_items = max(int(target * 1.5), target + 20)
+    # Actor'ın GERÇEK input alanları (şemadan).
+    max_results = max(int(target * 1.5), target + 20)
     actor_input = cfg.get("apify_input") or {
         "hashtags": hashtags,
-        "minFollowers": min_f,
-        "maxFollowers": max_f,
-        "maxItems": max_items,
+        "min_followers": min_f,
+        "max_followers": max_f,  # 0 = limitsiz
+        "max_results": max_results,
+        "extract_emails": True,
+        "follow_bio_links": False,  # hız için kapalı (bio link takibi yavaş)
     }
-    if wanted:
-        actor_input.setdefault("countries", sorted(wanted))
+    # country_hint tek string, kesin filtre değil; sadece ilk ülkeyi ipucu ver.
+    if wanted and "country_hint" not in actor_input:
+        actor_input["country_hint"] = sorted(wanted)[0]
 
     poll_interval = float(cfg.get("poll_interval", 3))
-    overall_timeout = float(cfg.get("overall_timeout", 240))  # toplam bekleme tavanı
+    overall_timeout = float(cfg.get("overall_timeout", 240))
 
-    # 1) Actor'ı ASENKRON başlat
+    # 1) ASENKRON başlat
     run_url = f"{APIFY_BASE}/acts/{actor}/runs"
     r = requests.post(run_url, params={"token": token}, json=actor_input, timeout=30)
     if r.status_code >= 400:
@@ -267,40 +251,40 @@ def find_creators(cfg: dict) -> List[dict]:
     if not run_id or not dataset_id:
         raise RuntimeError("Apify run baslatilamadi (id yok).")
 
-    seen: Dict[str, dict] = {}
+    all_norm: Dict[str, dict] = {}   # tüm normalize kayıtlar (filtresiz yedek)
+    matched: Dict[str, dict] = {}    # ülke/dil filtresinden geçenler
     start = time.time()
 
-    def collect_dataset() -> None:
-        """Dataset'teki mevcut item'ları oku ve filtreden geçenleri ekle."""
-        ds_url = f"{APIFY_BASE}/datasets/{dataset_id}/items"
-        resp = requests.get(ds_url, params={"token": token, "clean": "true", "limit": max_items}, timeout=60)
-        if resp.status_code >= 400:
-            return
-        items = resp.json()
-        if not isinstance(items, list):
-            return
-        for raw in items:
+    def collect() -> None:
+        for raw in _fetch_dataset(dataset_id, token, max_results):
             rec = normalize_item(raw)
-            if not rec or rec["username"] in seen:
+            if not rec or rec["username"] in all_norm:
                 continue
-            if _passes_filters(rec, min_f, max_f, wanted, wanted_langs):
-                seen[rec["username"]] = rec
+            f = rec["followers"]
+            if f and (f < min_f or f > max_f):
+                continue
+            all_norm[rec["username"]] = rec
+            # Ülke/dil eşleşmesi
+            if wanted:
+                lang_ok = rec["detected_lang"] in wanted_langs if rec["detected_lang"] else False
+                country_ok = rec["country"] in wanted if rec["country"] else False
+                if lang_ok or country_ok:
+                    matched[rec["username"]] = rec
+            else:
+                matched[rec["username"]] = rec
 
-    # 2) Çalışırken yokla; hedefe ulaşınca ya da bitince dur
     status = run.get("status", "RUNNING")
     while True:
         time.sleep(poll_interval)
-        collect_dataset()
+        collect()
 
-        if len(seen) >= target:
-            # Yeterince bulduk: run'ı durdur (kredi + zaman tasarrufu) ve çık.
+        if len(matched) >= target:
             try:
                 requests.post(f"{APIFY_BASE}/actor-runs/{run_id}/abort", params={"token": token}, timeout=15)
             except Exception:
                 pass
             break
 
-        # Run durumunu kontrol et
         try:
             sr = requests.get(f"{APIFY_BASE}/actor-runs/{run_id}", params={"token": token}, timeout=15)
             status = sr.json().get("data", {}).get("status", status)
@@ -308,7 +292,7 @@ def find_creators(cfg: dict) -> List[dict]:
             pass
 
         if status in ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"):
-            collect_dataset()  # son bir kez topla
+            collect()
             break
 
         if time.time() - start > overall_timeout:
@@ -316,10 +300,14 @@ def find_creators(cfg: dict) -> List[dict]:
                 requests.post(f"{APIFY_BASE}/actor-runs/{run_id}/abort", params={"token": token}, timeout=15)
             except Exception:
                 pass
-            collect_dataset()
+            collect()
             break
 
-    rows = sorted(seen.values(), key=lambda r: r["followers"], reverse=True)
+    # Ülke filtresi seçiliydi ama hiç eşleşme yoksa: kullanıcıya boş ekran
+    # göstermek yerine filtresiz sonucu dön (dil tespiti actor verisine bağlı,
+    # her zaman tutmayabilir). Eşleşme varsa onları önceler.
+    pool = matched if matched else all_norm
+    rows = sorted(pool.values(), key=lambda r: r["followers"], reverse=True)
     return rows[:target]
 
 
