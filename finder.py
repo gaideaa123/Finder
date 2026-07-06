@@ -213,7 +213,7 @@ def find_creators(cfg: dict) -> List[dict]:
     require_email = bool(cfg.get("require_email", False))
     strict_country = bool(cfg.get("strict_country", True))
     skip_seen = bool(cfg.get("skip_seen", True))
-    apify_memory = int(cfg.get("apify_memory", 16384))  # 16GB (hiz icin)
+    apify_memory = int(cfg.get("apify_memory", 16384))
 
     wanted = set()
     for c in cfg.get("countries", []) or []:
@@ -224,14 +224,16 @@ def find_creators(cfg: dict) -> List[dict]:
 
     history = load_history() if skip_seen else set()
 
-    max_results = max(int(target * 2.5), target + 40)
+    # Filtre (ulke/dil) + gecmis + email cok aday eler. Hedefe ulasmak icin
+    # bolca aday cek: 6x + genis taban.
+    max_results = max(int(target * 6), target + 120)
     actor_input = cfg.get("apify_input") or {
         "hashtags": hashtags,
         "min_followers": min_f,
         "max_followers": max_f,
         "max_results": max_results,
         "extract_emails": True,
-        "follow_bio_links": bool(require_email),
+        "follow_bio_links": True,  # email icin HER ZAMAN bio-linkleri de tara
     }
     if require_email:
         actor_input["require_email"] = True
@@ -239,7 +241,7 @@ def find_creators(cfg: dict) -> List[dict]:
         actor_input["country_hint"] = sorted(wanted)[0]
 
     poll_interval = float(cfg.get("poll_interval", 3))
-    overall_timeout = float(cfg.get("overall_timeout", 240))
+    overall_timeout = float(cfg.get("overall_timeout", 360))
 
     run_url = f"{APIFY_BASE}/acts/{actor}/runs"
     r = requests.post(run_url, params={"token": token, "memory": apify_memory}, json=actor_input, timeout=30)
