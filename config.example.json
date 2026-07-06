@@ -1,16 +1,26 @@
 {
   "apify_token": "BURAYA_APIFY_API_TOKENINI_YAPISTIR",
   "apify_actor": "paxiq~tiktok-influencer-scraper",
+  "_hashtag_notu": "Bunlar CaptionAI icin secildi: sik paylasan, caption'a ihtiyaci olan nisler. Kendi hedefine gore ekle/cikar.",
   "hashtags": [
     "yemektarifi",
     "evyemekleri",
-    "gymtok",
+    "günlükvlog",
+    "vloglife",
     "kombin",
-    "gezilecekyerler"
+    "makyaj",
+    "ciltbakımı",
+    "spormotivasyon",
+    "gymtok",
+    "gezilecekyerler",
+    "bilgipaylaşımı",
+    "küçükişletme",
+    "elemeği",
+    "içeriküretici"
   ],
   "countries": ["Türkiye"],
-  "min_followers": 5000,
-  "max_followers": 50000,
+  "min_followers": 3000,
+  "max_followers": 80000,
   "target_count": 100,
   "output_csv": "creators.csv"
 }
