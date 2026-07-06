@@ -62,7 +62,7 @@
     border: none; cursor: pointer; border-radius: 12px; font-weight: 700;
     font-size: 15px; padding: 13px 18px; width: 100%; color: white;
     background: linear-gradient(135deg, var(--accent), var(--accent-2));
-    transition: transform .12s ease, opacity .2s ease;
+    transition: transform .12s ease, opacity .2s ease; text-decoration: none;
   }
   .btn:hover { transform: translateY(-1px); }
   .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
@@ -111,8 +111,8 @@
 <body>
 <div class="wrap">
   <header>
-    <div class="logo"><span class="dot">\U0001F50E</span> CaptionAI Finder</div>
-    <p>TikTok'ta ni\u015fine uygun i\u00e7erik \u00fcreticileri bul, her birine ki\u015fiye \u00f6zel DM'i haz\u0131r al.</p>
+    <div class="logo"><span class="dot">🔎</span> CaptionAI Finder</div>
+    <p>TikTok'ta nişine uygun içerik üreticileri bul, her birine kişiye özel DM'i hazır al.</p>
   </header>
 
   <div class="grid">
@@ -120,57 +120,57 @@
     <div class="card">
       <h2>Ayarlar</h2>
 
-      <label>Hashtag'ler (virg\u00fclle ay\u0131r)</label>
+      <label>Hashtag'ler (virgülle ayır)</label>
       <textarea id="hashtags" rows="3" placeholder="yemektarifi, gymtok, kombin"></textarea>
 
       <div class="row">
         <div>
-          <label>Min takip\u00e7i</label>
+          <label>Min takipçi</label>
           <input id="min_followers" type="number" value="5000" />
         </div>
         <div>
-          <label>Max takip\u00e7i</label>
+          <label>Max takipçi</label>
           <input id="max_followers" type="number" value="50000" />
         </div>
       </div>
 
       <div class="row">
         <div>
-          <label>Min etkile\u015fim (%)</label>
+          <label>Min etkileşim (%)</label>
           <input id="min_er" type="number" value="5" step="0.5" />
         </div>
         <div>
-          <label>Hedef say\u0131</label>
+          <label>Hedef sayı</label>
           <input id="target" type="number" value="100" />
         </div>
       </div>
 
-      <label>msToken (taray\u0131c\u0131dan)</label>
-      <input id="ms_token" type="password" placeholder="msToken de\u011ferini yap\u0131\u015ft\u0131r" />
-      <p class="hint">Nas\u0131l al\u0131n\u0131r: TikTok'ta F12 \u2192 Application \u2192 Cookies \u2192 msToken. Detay README'de.</p>
+      <label>msToken (tarayıcıdan)</label>
+      <input id="ms_token" type="password" placeholder="msToken değerini yapıştır" />
+      <p class="hint">Nasıl alınır: TikTok'ta F12 → Application → Cookies → msToken. Detay README'de.</p>
 
-      <label>DM \u015fablonu (<code>{name}</code> otomatik dolar)</label>
+      <label>DM şablonu (<code>{name}</code> otomatik dolar)</label>
       <textarea id="template" rows="10"></textarea>
 
       <div style="margin-top:16px">
-        <button class="btn" id="searchBtn" onclick="runSearch()">\U0001F680 \u00dcreticileri Bul</button>
+        <button class="btn" id="searchBtn" onclick="runSearch()">🚀 Üreticileri Bul</button>
       </div>
       <div class="status" id="status"></div>
     </div>
 
-    <!-- SA\u011e: Sonu\u00e7lar -->
+    <!-- SAĞ: Sonuçlar -->
     <div class="card">
       <div class="toolbar">
-        <h2 style="margin:0">Bulunan \u00dcreticiler</h2>
+        <h2 style="margin:0">Bulunan Üreticiler</h2>
         <div style="display:flex; gap:10px; align-items:center">
-          <span class="count-pill" id="countPill">0 ki\u015fi</span>
-          <button class="btn secondary small" id="csvBtn" onclick="downloadCsv()" disabled>CSV \u0130ndir</button>
+          <span class="count-pill" id="countPill">0 kişi</span>
+          <button class="btn secondary small" id="csvBtn" onclick="downloadCsv()" disabled>CSV İndir</button>
         </div>
       </div>
       <div class="creators" id="results"></div>
       <div class="empty" id="empty">
-        <div class="big">\U0001F440</div>
-        Hen\u00fcz sonu\u00e7 yok. Soldan ayarlar\u0131 girip <b>\u00dcreticileri Bul</b>'a bas.
+        <div class="big">👀</div>
+        Henüz sonuç yok. Soldan ayarları girip <b>Üreticileri Bul</b>'a bas.
       </div>
     </div>
   </div>
@@ -181,7 +181,7 @@
   const CFG = {{ cfg|tojson }};
   let CREATORS = [];
 
-  // On-doldur
+  // Ön-doldur
   document.getElementById('template').value = DEFAULT_TEMPLATE;
   if (CFG.hashtags) document.getElementById('hashtags').value = CFG.hashtags.join(', ');
   if (CFG.min_followers) document.getElementById('min_followers').value = CFG.min_followers;
@@ -215,8 +215,8 @@
     };
 
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Taran\u0131yor...';
-    setStatus('TikTok taran\u0131yor, bu birka\u00e7 dakika s\u00fcrebilir...');
+    btn.innerHTML = '<span class="spinner"></span> Taranıyor...';
+    setStatus('TikTok taranıyor, bu birkaç dakika sürebilir...');
 
     try {
       const res = await fetch('/api/search', {
@@ -228,50 +228,50 @@
       if (!data.ok) throw new Error(data.error || 'Bilinmeyen hata');
       CREATORS = data.creators;
       render();
-      setStatus(`Tamam! ${data.count} \u00fcretici bulundu.`);
+      setStatus('Tamam! ' + data.count + ' üretici bulundu.');
     } catch (e) {
       setStatus('Hata: ' + e.message, true);
     } finally {
       btn.disabled = false;
-      btn.innerHTML = '\U0001F680 \u00dcreticileri Bul';
+      btn.innerHTML = '🚀 Üreticileri Bul';
     }
   }
 
   function render() {
     const wrap = document.getElementById('results');
     const empty = document.getElementById('empty');
-    document.getElementById('countPill').textContent = CREATORS.length + ' ki\u015fi';
+    document.getElementById('countPill').textContent = CREATORS.length + ' kişi';
     document.getElementById('csvBtn').disabled = CREATORS.length === 0;
 
     if (!CREATORS.length) { empty.style.display = 'block'; wrap.innerHTML = ''; return; }
     empty.style.display = 'none';
 
-    wrap.innerHTML = CREATORS.map((c, i) => `
-      <div class="creator">
-        <div class="creator-head">
-          <div>
-            <div class="creator-name">${escapeHtml(c.nickname || c.username)}</div>
-            <div class="creator-sub">@${escapeHtml(c.username)} \u00b7 #${escapeHtml(c.hashtag)}</div>
-          </div>
-          <div class="badges">
-            <span class="badge">${formatNum(c.followers)} takip\u00e7i</span>
-            <span class="badge er">ER ${(c.engagement_rate*100).toFixed(1)}%</span>
-          </div>
-        </div>
-        <div class="dm" id="dm-${i}">${escapeHtml(c.message)}</div>
-        <div class="creator-actions">
-          <button class="btn small" onclick="copyDm(${i}, this)">\U0001F4CB Kopyala</button>
-          <a class="btn small secondary" href="${c.profile}" target="_blank" rel="noopener">\U0001F464 Profile Git</a>
-        </div>
-      </div>
-    `).join('');
+    wrap.innerHTML = CREATORS.map((c, i) =>
+      '<div class="creator">' +
+        '<div class="creator-head">' +
+          '<div>' +
+            '<div class="creator-name">' + escapeHtml(c.nickname || c.username) + '</div>' +
+            '<div class="creator-sub">@' + escapeHtml(c.username) + ' · #' + escapeHtml(c.hashtag) + '</div>' +
+          '</div>' +
+          '<div class="badges">' +
+            '<span class="badge">' + formatNum(c.followers) + ' takipçi</span>' +
+            '<span class="badge er">ER ' + (c.engagement_rate*100).toFixed(1) + '%</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="dm" id="dm-' + i + '">' + escapeHtml(c.message) + '</div>' +
+        '<div class="creator-actions">' +
+          '<button class="btn small" onclick="copyDm(' + i + ', this)">📋 Kopyala</button>' +
+          '<a class="btn small secondary" href="' + c.profile + '" target="_blank" rel="noopener">👤 Profile Git</a>' +
+        '</div>' +
+      '</div>'
+    ).join('');
   }
 
   function copyDm(i, btn) {
     const text = CREATORS[i].message;
     navigator.clipboard.writeText(text).then(() => {
       const orig = btn.innerHTML;
-      btn.innerHTML = '\u2705 Kopyaland\u0131';
+      btn.innerHTML = '✅ Kopyalandı';
       btn.classList.add('copied');
       setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('copied'); }, 1500);
     });
