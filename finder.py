@@ -1,4 +1,4 @@
-"""CaptionAI Finder - Apify tabanli creator bulma (16GB, asenkron, 6 dil)."""
+"""CaptionAI Finder - Apify tabanli creator bulma (coklu token, 16GB, 6 dil)."""
 
 import json
 import os
@@ -63,8 +63,7 @@ LANG_WORDS = {
 def load_history() -> Set[str]:
     try:
         with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return set(data.get("seen", []))
+            return set(json.load(f).get("seen", []))
     except Exception:
         return set()
 
@@ -197,10 +196,36 @@ def _fetch_dataset(dataset_id: str, token: str, limit: int) -> List[dict]:
     return data if isinstance(data, list) else []
 
 
+def _start_run(actor: str, tokens: List[str], actor_input: dict, memory: int):
+    """Token listesini sirayla dener; biri kabul edince (run, token) doner.
+    Hepsi basarisizsa RuntimeError."""
+    run_url = f"{APIFY_BASE}/acts/{actor}/runs"
+    last_err = ""
+    for tok in tokens:
+        tok = tok.strip()
+        if not tok:
+            continue
+        for params in ({"token": tok, "memory": memory}, {"token": tok}):
+            try:
+                r = requests.post(run_url, params=params, json=actor_input, timeout=30)
+            except Exception as e:  # noqa: BLE001
+                last_err = str(e)
+                continue
+            if r.status_code < 400:
+                return r.json().get("data", {}), tok
+            last_err = f"{r.status_code}: {r.text[:150]}"
+            # Yetki/kota hatasiysa sonraki token'a gec; degilse belleksiz dene
+            if any(k in last_err.lower() for k in ["401", "403", "quota", "payment", "insufficient", "limit"]):
+                break
+    raise RuntimeError(f"Tum Apify token'lari basarisiz. Son hata -> {last_err}")
+
+
 def find_creators(cfg: dict) -> List[dict]:
-    token = cfg.get("apify_token", "")
-    if not token or "YAPISTIR" in token:
-        raise RuntimeError("Gecerli bir Apify API token yok. apify.com'dan al ve panele yapistir.")
+    # Coklu token: apify_tokens listesi ya da tek apify_token
+    tokens = cfg.get("apify_tokens") or ([cfg.get("apify_token")] if cfg.get("apify_token") else [])
+    tokens = [t for t in tokens if t and "YAPISTIR" not in t]
+    if not tokens:
+        raise RuntimeError("Gecerli bir Apify API token yok.")
 
     actor = cfg.get("apify_actor", "paxiq~tiktok-influencer-scraper")
     hashtags = [h.lstrip("#") for h in cfg.get("hashtags", []) if h.strip()]
@@ -224,8 +249,6 @@ def find_creators(cfg: dict) -> List[dict]:
 
     history = load_history() if skip_seen else set()
 
-    # Filtre (ulke/dil) + gecmis + email cok aday eler. Hedefe ulasmak icin
-    # bolca aday cek: 6x + genis taban.
     max_results = max(int(target * 6), target + 120)
     actor_input = cfg.get("apify_input") or {
         "hashtags": hashtags,
@@ -233,7 +256,7 @@ def find_creators(cfg: dict) -> List[dict]:
         "max_followers": max_f,
         "max_results": max_results,
         "extract_emails": True,
-        "follow_bio_links": True,  # email icin HER ZAMAN bio-linkleri de tara
+        "follow_bio_links": True,
     }
     if require_email:
         actor_input["require_email"] = True
@@ -243,13 +266,7 @@ def find_creators(cfg: dict) -> List[dict]:
     poll_interval = float(cfg.get("poll_interval", 3))
     overall_timeout = float(cfg.get("overall_timeout", 360))
 
-    run_url = f"{APIFY_BASE}/acts/{actor}/runs"
-    r = requests.post(run_url, params={"token": token, "memory": apify_memory}, json=actor_input, timeout=30)
-    if r.status_code >= 400:
-        r = requests.post(run_url, params={"token": token}, json=actor_input, timeout=30)
-        if r.status_code >= 400:
-            raise RuntimeError(f"Apify baslatma hatasi ({r.status_code}): {r.text[:300]}")
-    run = r.json().get("data", {})
+    run, token = _start_run(actor, tokens, actor_input, apify_memory)
     run_id = run.get("id")
     dataset_id = run.get("defaultDatasetId")
     if not run_id or not dataset_id:
@@ -325,18 +342,3 @@ def save_csv(rows: List[dict], out_csv: str) -> None:
         writer.writeheader()
         for r in rows:
             writer.writerow({k: r.get(k, "") for k in fields})
-
-
-def _cli() -> None:
-    cfg = load_config()
-    print("Apify uzerinden araniyor... (asenkron, 16GB, erken durur)")
-    rows = find_creators(cfg)
-    out_csv = cfg.get("output_csv", "creators.csv")
-    save_csv(rows, out_csv)
-    print(f"BITTI: {len(rows)} uretici bulundu -> {out_csv}")
-    for r in rows[:10]:
-        print(f"  @{r['username']}  {r['followers']}  [{r['country'] or '?'}/{r['lang']}]  {r['email'] or '-'}")
-
-
-if __name__ == "__main__":
-    _cli()
