@@ -1,20 +1,15 @@
 {
+  "apify_token": "BURAYA_APIFY_API_TOKENINI_YAPISTIR",
+  "apify_actor": "paxiq~tiktok-influencer-scraper",
   "hashtags": [
     "yemektarifi",
     "evyemekleri",
-    "foodtiktok",
-    "spormotivasyon",
     "gymtok",
     "kombin",
-    "outfitinspo",
-    "gezilecekyerler",
-    "bilgipaylasimi"
+    "gezilecekyerler"
   ],
-  "videos_per_hashtag": 60,
   "min_followers": 5000,
   "max_followers": 50000,
-  "min_engagement_rate": 0.05,
   "target_count": 100,
-  "output_csv": "creators.csv",
-  "ms_token": "BURAYA_TARAYICIDAN_ALDIGIN_msToken_DEGERINI_YAPISTIR"
+  "output_csv": "creators.csv"
 }
