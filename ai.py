@@ -1,187 +1,197 @@
 """
-CaptionAI Finder - AI Beyni (google-genai: API key VEYA Vertex AI)
-=================================================================
+CaptionAI Finder - AI Beyni
+===========================
 
 İki backend:
-  1) API key   -> aistudio.google.com/apikey (hızlı başlangıç, ücretsiz kota)
-  2) Vertex AI -> project + location + model (kota bitince buraya geç)
-     Örn: project=captionai-501010, location=europe-central2,
-          model=gemini-3.1-flash-lite-preview
+  - apikey : generativelanguage REST API (SDK GEREKMEZ, her zaman calisir)
+             https://aistudio.google.com/apikey
+  - vertex : google-genai SDK (opsiyonel) - kota bitince project+location ile
 
-Vertex kimlik doğrulaması API key ile DEĞİL, Google Cloud kimlik bilgisiyle olur:
-  - `gcloud auth application-default login`  (en kolay), YA DA
-  - GOOGLE_APPLICATION_CREDENTIALS = service-account.json yolu
-Proje + bölge verilirse SDK bu kimlik bilgilerini otomatik kullanır.
-
-Yaptığı işler:
-  generate_dm     -> 10/10, sahici, ASLA AI/soğuk durmayan DM (DM'de link YOK)
-  analyze_fit     -> profil GÖRSELİ olmadan, metinden uygunluk skoru + yaklaşım
-  analyze_profile -> (opsiyonel) ekran görüntüsü ile gören analiz
-  analyze_reply   -> gelen yanıtı sınıflandır + cevap öner
-  learn_from_stats-> geçmiş yanıtlardan öğren
-
-Kota/anahtar bitince QuotaError fırlatır; app.py yakalayıp yeni anahtar/backend ister.
+Kota/anahtar bitince QuotaError firlatir; app.py yakalar.
 """
 
 import json
-import os
+import random
 from typing import List, Optional
 
+import requests
+
+GL_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
+
+# Vertex icin opsiyonel SDK
 try:
-    from google import genai
-    from google.genai import types as gtypes
-except ImportError:
-    genai = None
-    gtypes = None
+    from google import genai as _vertex_genai
+    from google.genai import types as _vertex_types
+except Exception:
+    _vertex_genai = None
+    _vertex_types = None
 
 
 class QuotaError(Exception):
-    """Kota/anahtar bitti -> yeni anahtar ya da Vertex'e geç."""
+    """Kota/anahtar bitti -> yeni anahtar ya da Vertex'e gec."""
+
+
+# Her cagriya cesitlilik katan stil tohumlari (ayni sablon tekrarini kirar).
+_STYLE_SEEDS = [
+    "open with a specific detail from their bio",
+    "open with a genuine compliment about one concrete thing in their content",
+    "open by relating to a struggle creators in their niche have",
+    "open with a short curious question",
+    "open casually like continuing a conversation",
+]
 
 
 class AIBrain:
-    """
-    backend='apikey' -> api_key gerekir.
-    backend='vertex' -> project + location gerekir (model opsiyonel).
-    """
-    def __init__(
-        self,
-        backend: str = "apikey",
-        api_key: str = "",
-        project: str = "",
-        location: str = "",
-        model: str = "",
-    ):
-        if genai is None:
-            raise RuntimeError("google-genai kurulu degil. pip install -r requirements.txt")
+    def __init__(self, backend="apikey", api_key="", project="", location="", model=""):
         self.backend = backend
         if backend == "vertex":
+            if _vertex_genai is None:
+                raise RuntimeError("Vertex icin google-genai kurulu degil (pip install google-genai).")
             if not project or not location:
                 raise RuntimeError("Vertex icin project ve location gerekli.")
-            self.model = model or "gemini-3.1-flash-lite-preview"
-            self.client = genai.Client(vertexai=True, project=project, location=location)
+            self.model = model or "gemini-2.5-flash"
+            self.client = _vertex_genai.Client(vertexai=True, project=project, location=location)
         else:
             if not api_key or "YAPISTIR" in api_key:
                 raise RuntimeError("Gecerli bir Gemini API key yok.")
+            self.api_key = api_key.strip()
             self.model = model or "gemini-2.5-flash"
-            self.client = genai.Client(api_key=api_key)
+            self.client = None
 
-    # --- Ortak çağrı ---
-    def _gen(self, contents) -> str:
+    # --- Dusuk seviye uretim ---
+    def _gen(self, prompt: str, temperature: float = 1.0, image=None) -> str:
+        if self.backend == "vertex":
+            return self._gen_vertex(prompt, temperature, image)
+        return self._gen_rest(prompt, temperature, image)
+
+    def _gen_rest(self, prompt, temperature, image) -> str:
+        parts = [{"text": prompt}]
+        if image is not None:
+            b64, mime = image
+            parts.append({"inline_data": {"mime_type": mime, "data": b64}})
+        url = f"{GL_BASE}/{self.model}:generateContent"
+        body = {"contents": [{"parts": parts}],
+                "generationConfig": {"temperature": temperature, "maxOutputTokens": 700}}
         try:
-            resp = self.client.models.generate_content(model=self.model, contents=contents)
+            r = requests.post(url, params={"key": self.api_key}, json=body, timeout=60)
+        except Exception as e:  # noqa: BLE001
+            raise RuntimeError(f"AI baglanti hatasi: {e}")
+        if r.status_code == 429:
+            raise QuotaError(r.text[:200])
+        if r.status_code >= 400:
+            low = r.text.lower()
+            if "quota" in low or "resource_exhausted" in low or "exhausted" in low:
+                raise QuotaError(r.text[:200])
+            raise RuntimeError(f"AI hatasi ({r.status_code}): {r.text[:200]}")
+        try:
+            data = r.json()
+            return (data["candidates"][0]["content"]["parts"][0]["text"] or "").strip()
+        except Exception:
+            return ""
+
+    def _gen_vertex(self, prompt, temperature, image) -> str:
+        try:
+            contents = [prompt]
+            if image is not None:
+                import base64
+                b64, mime = image
+                contents.append(_vertex_types.Part.from_bytes(data=base64.b64decode(b64), mime_type=mime))
+            cfg = _vertex_types.GenerateContentConfig(temperature=temperature, max_output_tokens=700)
+            resp = self.client.models.generate_content(model=self.model, contents=contents, config=cfg)
             return (getattr(resp, "text", "") or "").strip()
         except Exception as e:  # noqa: BLE001
-            msg = str(e).lower()
-            if any(k in msg for k in ["quota", "429", "resource_exhausted", "rate limit", "exhausted"]):
+            low = str(e).lower()
+            if any(k in low for k in ["quota", "429", "resource_exhausted", "exhausted"]):
                 raise QuotaError(str(e))
-            raise
+            raise RuntimeError(f"Vertex hatasi: {e}")
 
-    # --- 1) 10/10, sahici DM. DM'de link YOK. ---
-    def generate_dm(
-        self, creator: dict, lang: str, product_pitch: str,
-        learned_tips: str = "", link_url: str = "", channel: str = "dm",
-    ) -> str:
-        """channel='dm' -> linksiz (bio'ya yönlendir). channel='email' -> link_url gövdeye girer."""
-        lang_names = {"tr": "Turkish", "en": "English", "es": "Spanish",
-                      "de": "German", "fr": "French", "ar": "Arabic"}
-        lang_name = lang_names.get(lang, "English")
+    # --- Baglanti testi (panel 'AI: ok' icin) ---
+    def ping(self) -> bool:
+        txt = self._gen("Reply with just: OK", temperature=0)
+        return "ok" in (txt or "").lower()
+
+    # --- 10/10, farkli farki, dogru dilde DM ---
+    def generate_dm(self, creator, lang, product_pitch, learned_tips="", link_url="", channel="dm") -> str:
+        lang_rules = {
+            "tr": "Write in fluent, natural, correct Turkish. Native Gen-Z Turkish, not translated. "
+                  "BANNED broken phrases: 'videolarini takiliyorum', 'takiliyorum'. Correct is 'videolarini takip ediyorum' / 'izliyorum'.",
+            "en": "Write in fluent, natural English.",
+            "es": "Write in fluent, natural Spanish.",
+            "de": "Write in fluent, natural German.",
+            "fr": "Write in fluent, natural French.",
+            "ar": "Write in fluent, natural Arabic.",
+        }
+        lang_names = {"tr": "Turkish", "en": "English", "es": "Spanish", "de": "German", "fr": "French", "ar": "Arabic"}
         name = creator.get("nickname") or creator.get("username", "")
         bio = creator.get("bio", "")
         followers = creator.get("followers", 0)
+        seed = random.choice(_STYLE_SEEDS)
 
         if channel == "email":
-            link_rule = (
-                f"- This is an EMAIL. Include the link exactly once, naturally: {link_url}\n"
-                "- Slightly longer is ok (4-6 sentences), still warm and human, not corporate."
-            )
+            link_rule = f"- This is an EMAIL. Include the link once, naturally: {link_url}. 4-6 warm human sentences."
         else:
-            link_rule = (
-                "- This is a TikTok DM. NEVER put any link or URL (TikTok blocks link DMs). "
-                "Instead say the link is in my bio.\n"
-                "- Max 3 short sentences."
-            )
+            link_rule = ("- This is a TikTok DM. NEVER include any link/URL. Say the link is in my bio. Max 3 short sentences.")
 
-        prompt = f"""You are a real 16-year-old founder writing to a TikTok creator. Write ONE message in {lang_name}.
-This must read as 10/10 human. If it smells even slightly like AI or a cold mass-DM, you failed.
+        prompt = f"""You are a real 16-year-old founder writing a 1:1 outreach message to a TikTok creator.
+Goal: sound 100% human and warm, and make each message clearly DIFFERENT from others. If it reads like AI or a template, you failed.
 
-CREATOR:
-- name: {name}
-- bio: {bio or '(empty)'}
-- followers: {followers}
+CREATOR: name={name}; followers={followers}; bio=\"{bio or '(empty)'}\"
 
-WHAT I MADE (weave in naturally, never hard-sell):
-{product_pitch}
+LANGUAGE: {lang_names.get(lang,'English')}. {lang_rules.get(lang, lang_rules['en'])}
+Grammar and word choice MUST be flawless and natural for a native speaker. No awkward or broken phrases.
 
-VOICE (obey all):
-- Sound like a real teen texting, not a brand. Lowercase where natural, casual, warm, a little raw.
-- Open with something specific and true about THEM (from bio/niche). No generic "love your content".
-- One genuine reason it could help them, then a soft ask for honest feedback. Never salesy.
-- At most ONE emoji, and never start with it. Vary rhythm, use a short fragment.
-- BANNED words/vibes: unlock, elevate, game-changer, boost, "as a fellow", "I came across", "I wanted to reach out", "hope this finds you", perfect symmetry, corporate tone.
+WHAT I MADE (mention naturally, never hard-sell): {product_pitch}
+
+STYLE FOR THIS ONE (follow it, this makes each message unique): {seed}.
+- Warm, casual, real. One genuine reason it could help THEM, then a soft ask for honest feedback.
+- At most ONE emoji, never start with it. Vary sentence rhythm.
+- BANNED vibes/words: unlock, elevate, game-changer, boost, corporate tone, 'I came across', 'I wanted to reach out', 'hope this finds you'.
 {link_rule}
-{('- Apply what got replies before: ' + learned_tips) if learned_tips else ''}
+{('- Lessons from what got replies: ' + learned_tips) if learned_tips else ''}
 
 Output ONLY the message text."""
-        return self._gen(prompt)
+        return self._gen(prompt, temperature=1.1)
 
-    # --- 2) Metin bazlı uygunluk (GÖRSEL GEREKMEZ) ---
-    def analyze_fit(self, creator: dict) -> dict:
-        """bio/niş/takipçiden uygunluk. Döner: {fit_score, reason, angle}."""
+    def analyze_fit(self, creator) -> dict:
         name = creator.get("nickname") or creator.get("username", "")
         bio = creator.get("bio", "")
         followers = creator.get("followers", 0)
-        lang = creator.get("lang", "en")
-        prompt = f"""Assess if this TikTok creator is a good target for a caption-writing tool.
-Weak/short/generic captions or no clear caption effort = BETTER fit (higher score).
-
-CREATOR: name={name}; followers={followers}; language={lang}; bio=\"{bio or '(empty)'}\"
-
-Return STRICT JSON only:
-{{"fit_score": 0-100, "reason": "one short sentence why", "angle": "one short sentence on how to pitch them"}}"""
-        return _safe_json(self._gen(prompt), default={"fit_score": 50, "reason": "", "angle": ""})
-
-    # --- 3) (Opsiyonel) Gören analiz: ekran görüntüsü ---
-    def analyze_profile(self, image_bytes: bytes, mime: str = "image/png") -> dict:
-        img = gtypes.Part.from_bytes(data=image_bytes, mime_type=mime)
         prompt = (
-            "Look at this TikTok profile screenshot as a growth expert. Return STRICT JSON only: "
-            '{"niche": str, "tone": str, "captions_weak": true/false, "fit_score": 0-100, '
-            '"approach": one short sentence}'
+            "Assess if this TikTok creator is a good target for a caption-writing tool. "
+            "Weak/short/generic captions = better fit. "
+            f"CREATOR: name={name}; followers={followers}; bio=\"{bio or '(empty)'}\". "
+            'Return STRICT JSON only: {"fit_score":0-100,"reason":"one short sentence","angle":"one short sentence"}'
         )
-        raw = self._gen([prompt, img])
-        return _safe_json(raw, default={"niche": "", "tone": "", "captions_weak": False,
-                                        "fit_score": 50, "approach": ""})
+        return _safe_json(self._gen(prompt, temperature=0.4), {"fit_score": 50, "reason": "", "angle": ""})
 
-    # --- 4) Yanıt analizi ---
-    def analyze_reply(self, dm_sent: str, reply_text: str, lang: str = "tr") -> dict:
-        prompt = f"""A creator replied to my outreach. Classify and draft a natural reply.
-MY DM: {dm_sent}
-THEIR REPLY: {reply_text}
-Return STRICT JSON only:
-{{"sentiment":"pos"|"neu"|"neg","category":"interested"|"question"|"not_interested"|"spammy","suggested_reply":"short human reply in their language"}}"""
-        return _safe_json(self._gen(prompt), default={"sentiment": "neu", "category": "question", "suggested_reply": ""})
+    def analyze_profile(self, image_bytes, mime="image/png") -> dict:
+        import base64
+        b64 = base64.b64encode(image_bytes).decode()
+        prompt = ('Look at this TikTok profile screenshot. Return STRICT JSON only: '
+                  '{"niche":str,"tone":str,"captions_weak":true/false,"fit_score":0-100,"approach":one short sentence}')
+        return _safe_json(self._gen(prompt, temperature=0.4, image=(b64, mime)),
+                          {"niche": "", "tone": "", "captions_weak": False, "fit_score": 50, "approach": ""})
 
-    # --- 5) Öğrenme ---
-    def learn_from_stats(self, samples: List[dict]) -> str:
+    def analyze_reply(self, dm_sent, reply_text, lang="tr") -> dict:
+        prompt = (f"Creator replied to my DM. MY DM: {dm_sent}\nTHEIR REPLY: {reply_text}\n"
+                  'Return STRICT JSON only: {"sentiment":"pos"|"neu"|"neg","category":"interested"|"question"|"not_interested"|"spammy","suggested_reply":"short human reply in their language"}')
+        return _safe_json(self._gen(prompt, temperature=0.6), {"sentiment": "neu", "category": "question", "suggested_reply": ""})
+
+    def learn_from_stats(self, samples) -> str:
         if not samples:
             return ""
-        compact = [{"m": (s.get("message", "")[:200]), "replied": bool(s.get("replied")),
-                    "sent": s.get("sentiment", "")} for s in samples[:60]]
-        prompt = (
-            "Past outreach DMs and whether they got a reply (JSON): "
-            + json.dumps(compact, ensure_ascii=False)
-            + ". In 2-3 one-line tips (no markdown), tell me what wording/length/angle gets MORE replies. Output only tips."
-        )
+        compact = [{"m": (s.get("message", "")[:180]), "replied": bool(s.get("replied"))} for s in samples[:50]]
+        prompt = ("Past DMs and whether they got replies (JSON): " + json.dumps(compact, ensure_ascii=False)
+                  + ". In 2-3 one-line tips (no markdown), what wording/length/angle gets MORE replies? Output only tips.")
         try:
-            return self._gen(prompt)
+            return self._gen(prompt, temperature=0.5)
         except QuotaError:
             raise
         except Exception:
             return ""
 
 
-def _safe_json(raw: str, default: dict) -> dict:
+def _safe_json(raw, default):
     if not raw:
         return default
     s = raw.strip()
@@ -193,9 +203,9 @@ def _safe_json(raw: str, default: dict) -> dict:
     if a != -1 and b != -1 and b > a:
         s = s[a:b + 1]
     try:
-        data = json.loads(s)
-        if isinstance(data, dict):
-            return {**default, **data}
+        d = json.loads(s)
+        if isinstance(d, dict):
+            return {**default, **d}
     except Exception:
         pass
     return default
