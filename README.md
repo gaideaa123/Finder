@@ -1,18 +1,23 @@
 # CaptionAI İçerik Üretici Bulucu 🔎
 
-TikTok'ta hashtag'lerden içerik üreticisi bulur, takipçi bandına göre filtreler
-ve **her biri için kişiye özel DM'i hazır** verir. Şık web arayüzünde: tek tıkla
-kopyala + profile git.
+TikTok'ta hashtag + ülkeye göre içerik üreticisi bulur, takipçi bandına göre
+filtreler ve **her biri için dilinde kişiye özel DM'i hazır** verir. Şık web
+arayüzünde: tek tıkla DM (kopyala + profili aç).
+
+## Öne çıkanlar
+
+- 🎯 **Ülke filtresi:** "Türkiye" yazarsan sadece Türk creator'lar gelir. Bir sürü
+  ülke destekli (ABD, Almanya, Fransa, İspanya, Arap ülkeleri...). Boş bırak = hepsi.
+- 🌍 **Otomatik dil:** Türk creator'a Türkçe, yabancıya İngilizce DM yazılır.
+  Creator'ın ülkesine göre şablon otomatik seçilir.
+- 💬 **Tek tıkla DM:** Butona bas → DM panoya kopyalanır + kişinin profili yeni
+  sekmede açılır. Sen sadece mesaj kutusuna yapıştırırsın.
 
 ## Neden Apify?
 
-TikTok, doğrudan kazımayı bilerek engelliyor: `msToken` saniyede değişiyor,
-Playwright kırılıyor. Bu yüzden **Apify** kullanıyoruz: TikTok'un anti-bot
-savaşını (proxy, fingerprint, token) onlar veriyor. Sen sadece **sabit bir API
-token'ı** alıyorsun (bir kere kopyala, hep çalışır) ve hashtag veriyorsun.
-
-Artı: kurulumda `Playwright`/`greenlet`/C++ derleyici derdi **yok**. Sadece
-`requests` + `Flask`, Python 3.14'te bile sorunsuz kurulur.
+TikTok doğrudan kazımayı bilerek engelliyor (`msToken` saniyede değişiyor).
+Apify bu savaşı senin yerine veriyor: sabit bir API token'ı alıyorsun, hashtag
+veriyorsun, creator listesi geliyor. Kurulumda Playwright/C++ derleyici derdi yok.
 
 ## Kurulum
 
@@ -20,60 +25,49 @@ Artı: kurulumda `Playwright`/`greenlet`/C++ derleyici derdi **yok**. Sadece
 pip install -r requirements.txt
 ```
 
-Hepsi bu. Native derleme yok.
+## Apify API token (tek seferlik, ücretsiz)
 
-## Apify API token nasıl alınır (tek seferlik, ücretsiz)
+1. [apify.com](https://apify.com)'a ücretsiz kayıt ol.
+2. [console.apify.com/account/integrations](https://console.apify.com/account/integrations) → API token'ı kopyala (`apify_api_...`).
+3. Arayüzdeki "Apify API Token" alanına yapıştır.
 
-1. [apify.com](https://apify.com)'a ücretsiz kayıt ol (aylık ücretsiz kredi veriyor).
-2. [console.apify.com/account/integrations](https://console.apify.com/account/integrations) → **Personal API tokens**.
-3. Token'ı kopyala (`apify_api_...` ile başlar). Bu değer sabittir, msToken gibi değişmez.
-4. Web arayüzündeki "Apify API Token" alanına yapıştır (veya `config.json`'a).
-
-## Kullanım — Web Arayüzü (önerilen) 🖥️
+## Kullanım
 
 ```bash
 python app.py
 ```
 
-Tarayıcıda aç: **http://127.0.0.1:5000**
+Tarayıcıda: **http://127.0.0.1:5000**
 
-- Apify token'ını, hashtag'leri ve takipçi bandını gir.
-- DM şablonunu düzenle (`{name}` ve `{bio}` her creator için otomatik dolar).
-- **Üreticileri Bul**'a bas.
-- Sağda her creator bir kart: adı, takipçi, **kişiye özel DM**, **📋 Kopyala** ve
-  **👤 Profile Git** butonları.
-- **CSV İndir** ile tüm listeyi dışa aktar.
+1. Apify token'ını gir.
+2. Hashtag'leri yaz (yemektarifi, gymtok...).
+3. **Ülke** yaz (örn. `Türkiye` ya da `Türkiye, Almanya`). Boş = tüm ülkeler.
+4. Takipçi bandını ve hedef sayıyı ayarla.
+5. İki şablonu düzenle: **Türkçe** (Türklere) ve **İngilizce** (yabancılara).
+6. **Üreticileri Bul**'a bas.
+7. Her kartta dil rozeti + hazır DM. **💬 DM At** = kopyala + profili aç, yapıştır, gönder.
 
-## Kullanım — Terminal (alternatif)
+## Tek tıkla DM hakkında dürüst not
 
-`config.example.json`'u `config.json` yap, `apify_token` ve hashtag'leri gir, sonra:
-
-```bash
-python finder.py
-```
-
-Çıktı: `creators.csv`.
+TikTok, dışarıdan otomatik DM göndermeye izin veren resmi bir API **sunmuyor**
+(2026). Gri 3. parti servisler hesabını banlatır. Bu yüzden "tek tık" güvenli
+sınırda tutuldu: metni kopyalar + profili açar, göndermeyi sen tek yapıştırmayla
+yaparsın. Hem yasal hem hesabın güvende.
 
 ## Ayarlar
 
 | Alan | Ne işe yarar |
 | --- | --- |
 | `apify_token` | Apify API token (zorunlu) |
-| `apify_actor` | Kullanılacak Apify actor'ı (varsayılan `paxiq~tiktok-influencer-scraper`) |
+| `apify_actor` | Apify actor'ı (varsayılan `paxiq~tiktok-influencer-scraper`) |
 | `hashtags` | Taranacak hashtag listesi |
-| `min_followers` / `max_followers` | Takipçi bandı (varsayılan 5K-50K) |
+| `countries` | Ülke filtresi (örn. `["Türkiye"]`). Boş = hepsi |
+| `min_followers` / `max_followers` | Takipçi bandı |
 | `target_count` | Kaç üretici bulununca duracağı |
-
-## Farklı actor kullanmak
-
-Varsayılan actor beklediğin sonucu vermezse Apify Store'da başka bir TikTok
-hashtag/influencer actor'ı seçip `apify_actor` alanına `kullanici~actor-adi`
-formatında yaz. `finder.py` içindeki normalize_item farklı alan isimlerini
-(username/handle/uniqueId, followers/followerCount/fans...) otomatik çözer.
-Gerekirse `config.json`'a `apify_input` ekleyip actor'a özel girdi verebilirsin.
 
 ## Uyarılar
 
-- Apify ücretsiz kredisi bitince küçük bir ücret alır; kullanımdan önce
-  actor'ın fiyatına bak (genelde 1000 sonuç birkaç dolar).
+- Apify ücretsiz kredisi bitince küçük ücret alır; actor fiyatına bak.
+- Ülke/dil bilgisi actor'ın döndürdüğü veriye bağlıdır; bazı creator'larda ülke
+  boş gelebilir (o durumda İngilizce şablon kullanılır ve ülke filtresinde elenmez).
 - Topladığın verileri sadece kişiye özel DM için kullan, toplu spam'e çevirme.
