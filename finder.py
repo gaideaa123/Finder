@@ -19,6 +19,7 @@ import requests
 
 APIFY_BASE = "https://api.apify.com/v2"
 
+SUPPORTED_LANGS = ["tr", "en", "es", "de", "fr", "ar"]
 
 # --- Ülke -> dil eşlemesi ------------------------------------------------
 COUNTRY_LANG = {
@@ -27,38 +28,46 @@ COUNTRY_LANG = {
     "DE": "de", "AT": "de", "CH": "de",
     "FR": "fr", "BE": "fr",
     "ES": "es", "MX": "es", "AR": "es", "CO": "es", "CL": "es", "PE": "es",
-    "SA": "ar", "AE": "ar", "EG": "ar", "IQ": "ar", "JO": "ar", "MA": "ar",
+    "SA": "ar", "AE": "ar", "EG": "ar", "IQ": "ar", "JO": "ar", "MA": "ar", "DZ": "ar",
     "IT": "it", "PT": "pt", "BR": "pt", "NL": "nl", "RU": "ru",
 }
 
+# GUI'deki 6 hedef dil için temsili ülke kodu (dil -> ana ülke).
+LANG_MAIN_COUNTRY = {"tr": "TR", "en": "US", "es": "ES", "de": "DE", "fr": "FR", "ar": "SA"}
+
 COUNTRY_NAME_TO_ISO = {
-    "turkiye": "TR", "türkiye": "TR", "turkey": "TR", "tr": "TR", "turkce": "TR", "türkçe": "TR",
-    "amerika": "US", "abd": "US", "usa": "US", "united states": "US", "us": "US",
+    "turkiye": "TR", "türkiye": "TR", "turkey": "TR", "tr": "TR",
+    "amerika": "US", "abd": "US", "usa": "US", "united states": "US", "us": "US", "ingilizce": "US", "english": "US",
     "ingiltere": "GB", "uk": "GB", "united kingdom": "GB", "gb": "GB",
-    "almanya": "DE", "germany": "DE", "de": "DE",
-    "fransa": "FR", "france": "FR", "fr": "FR",
-    "ispanya": "ES", "spain": "ES", "es": "ES",
+    "almanya": "DE", "germany": "DE", "de": "DE", "almanca": "DE", "deutsch": "DE",
+    "fransa": "FR", "france": "FR", "fr": "FR", "fransızca": "FR", "francais": "FR",
+    "ispanya": "ES", "spain": "ES", "es": "ES", "ispanyolca": "ES", "espanol": "ES", "español": "ES",
+    "arabistan": "SA", "suudi arabistan": "SA", "saudi arabia": "SA", "sa": "SA", "arapça": "SA", "arabic": "SA", "arab": "SA",
     "italya": "IT", "italy": "IT", "it": "IT",
     "hollanda": "NL", "netherlands": "NL", "nl": "NL",
     "kanada": "CA", "canada": "CA", "ca": "CA",
-    "avustralya": "AU", "australia": "AU", "au": "AU",
     "meksika": "MX", "mexico": "MX", "mx": "MX",
-    "arjantin": "AR", "argentina": "AR", "ar": "AR",
     "brezilya": "BR", "brazil": "BR", "br": "BR",
-    "portekiz": "PT", "portugal": "PT", "pt": "PT",
-    "rusya": "RU", "russia": "RU", "ru": "RU",
-    "suudi arabistan": "SA", "saudi arabia": "SA", "sa": "SA",
     "bae": "AE", "uae": "AE", "ae": "AE",
     "misir": "EG", "mısır": "EG", "egypt": "EG", "eg": "EG",
 }
 
-# Türkçe'ye özgü karakterler ve sık kelimeler (metinden ülke/dil çıkarımı için).
+# --- Dil sinyalleri (metinden çıkarım) -----------------------------------
 TURKISH_CHARS = set("ışğüöçİ")
-TURKISH_WORDS = {
-    "ve", "bir", "için", "ile", "çok", "video", "takip", "içerik", "günlük",
-    "tarif", "yemek", "moda", "gezi", "seyahat", "spor", "komik", "eğlence",
-    "iş", "birlikte", "kanal", "abone", "merhaba", "selam", "türkiye", "türk",
-    "öğrenci", "anne", "hayat", "aşk", "sizin", "benim",
+GERMAN_CHARS = set("äöüß")
+SPANISH_CHARS = set("ñ¿¡")
+ARABIC_RE = re.compile(r"[\u0600-\u06FF]")
+
+LANG_WORDS = {
+    "tr": {"ve", "bir", "için", "ile", "çok", "video", "takip", "içerik", "tarif",
+           "yemek", "moda", "gezi", "seyahat", "spor", "eğlence", "kanal", "abone",
+           "merhaba", "selam", "türkiye", "türk", "hayat", "günlük"},
+    "es": {"el", "la", "los", "las", "para", "con", "por", "vida", "amor", "videos",
+           "hola", "gracias", "contenido", "receta", "comida", "viaje", "moda", "belleza"},
+    "de": {"und", "der", "die", "das", "für", "mit", "ich", "leben", "video", "kanal",
+           "hallo", "essen", "reise", "mode", "rezept", "täglich"},
+    "fr": {"le", "la", "les", "pour", "avec", "et", "vie", "vidéo", "bonjour", "merci",
+           "recette", "cuisine", "voyage", "mode", "beauté", "quotidien"},
 }
 
 
@@ -77,15 +86,28 @@ def lang_for_country(iso: Optional[str]) -> str:
     return COUNTRY_LANG.get(iso.upper(), "en")
 
 
-def looks_turkish(text: str) -> bool:
-    """Metinde güçlü Türkçe sinyali var mı? (karakter veya kelime)"""
+def detect_lang_from_text(text: str) -> Optional[str]:
+    """Bio/isim metninden dil çıkar. Bulamazsa None."""
     if not text:
-        return False
-    low = text.lower()
+        return None
+    # Karakter bazlı güçlü sinyaller
+    if ARABIC_RE.search(text):
+        return "ar"
     if any(ch in TURKISH_CHARS for ch in text):
-        return True
-    tokens = set(re.findall(r"[a-zçğıöşü]+", low))
-    return len(tokens & TURKISH_WORDS) >= 1
+        return "tr"
+    if any(ch in GERMAN_CHARS for ch in text):
+        return "de"
+    if any(ch in SPANISH_CHARS for ch in text):
+        return "es"
+    # Kelime bazlı sinyaller
+    low = text.lower()
+    tokens = set(re.findall(r"[a-zàâäçéèêëîïôöùûüñ]+", low))
+    best_lang, best_hits = None, 0
+    for lang, words in LANG_WORDS.items():
+        hits = len(tokens & words)
+        if hits > best_hits:
+            best_lang, best_hits = lang, hits
+    return best_lang if best_hits >= 1 else None
 
 
 def load_config(path: Optional[str] = None) -> dict:
@@ -140,7 +162,6 @@ def normalize_item(item: dict) -> Optional[dict]:
     bio = _first(item, ["bio", "signature", "authorMeta.signature", "description"], default="")
     email = _first(item, ["email", "authorMeta.email"], default="")
 
-    # 1) Actor'un döndürdüğü ülke (varsa)
     country_raw = _first(
         item,
         ["country", "region", "countryCode", "authorMeta.region", "author.region", "location"],
@@ -148,18 +169,21 @@ def normalize_item(item: dict) -> Optional[dict]:
     )
     iso = country_to_iso(country_raw)
 
-    # 2) Actor'un döndürdüğü dil (varsa)
     lang_raw = _first(item, ["language", "lang", "authorMeta.language"], default="")
     lang = str(lang_raw).lower()[:2] if lang_raw else ""
+    if lang not in SUPPORTED_LANGS:
+        lang = ""
 
-    # 3) Metin bazlı çıkarım (ülke/dil bilinmiyorsa): bio + nickname
+    # Metin bazlı çıkarım (bio + isim)
     text_blob = f"{nickname} {bio}"
-    turkish_signal = looks_turkish(text_blob)
+    detected = detect_lang_from_text(text_blob)
 
-    if not iso and turkish_signal:
-        iso = "TR"
+    if not iso and detected:
+        iso = LANG_MAIN_COUNTRY.get(detected)
     if not lang:
-        lang = lang_for_country(iso) if iso else ("tr" if turkish_signal else "en")
+        lang = lang_for_country(iso) if iso else (detected or "en")
+    if lang not in SUPPORTED_LANGS:
+        lang = "en"
 
     return {
         "username": username,
@@ -168,8 +192,8 @@ def normalize_item(item: dict) -> Optional[dict]:
         "bio": bio or "",
         "email": email or "",
         "country": iso or "",
-        "lang": lang or "en",
-        "turkish_signal": turkish_signal,
+        "lang": lang,
+        "detected_lang": detected or "",
         "profile": f"https://www.tiktok.com/@{username}",
     }
 
@@ -186,8 +210,8 @@ def find_creators(cfg: dict) -> List[dict]:
     if not hashtags:
         raise RuntimeError("En az bir hashtag gerekli.")
 
-    min_f = int(cfg.get("min_followers", 5000))
-    max_f = int(cfg.get("max_followers", 50000))
+    min_f = int(cfg.get("min_followers", 3000))
+    max_f = int(cfg.get("max_followers", 80000))
     target = int(cfg.get("target_count", 100))
 
     wanted = set()
@@ -195,13 +219,14 @@ def find_creators(cfg: dict) -> List[dict]:
         iso = country_to_iso(c)
         if iso:
             wanted.add(iso)
-    only_turkey = wanted == {"TR"}
+    # İstenen ülkelerin dilleri (metin bazlı eşleşme için)
+    wanted_langs = {lang_for_country(iso) for iso in wanted}
 
     actor_input = cfg.get("apify_input") or {
         "hashtags": hashtags,
         "minFollowers": min_f,
         "maxFollowers": max_f,
-        "maxItems": target * 4,  # filtre sonrası hedefe ulaşmak için bolca çek
+        "maxItems": target * 4,
     }
     if wanted:
         actor_input.setdefault("countries", sorted(wanted))
@@ -226,18 +251,16 @@ def find_creators(cfg: dict) -> List[dict]:
         if f and (f < min_f or f > max_f):
             continue
 
-        # --- Ülke filtresi (artık gerçekten eliyor) ---
+        # --- Ülke/dil filtresi ---
         if wanted:
-            if only_turkey:
-                # Sadece Türkiye: ülke TR olmalı YA DA güçlü Türkçe sinyali olmalı.
-                # (Actor ülke döndürmese bile metinden Türk creator'ı yakalar,
-                #  yabancıları eler.)
-                if rec["country"] != "TR" and not rec["turkish_signal"]:
-                    continue
-            else:
-                # Belirli ülke(ler): ülke biliniyorsa listede olmalı.
-                # Bilinmiyorsa dahil et (actor ülke vermeyince her şey elenmesin).
-                if rec["country"] and rec["country"] not in wanted:
+            country_ok = rec["country"] in wanted if rec["country"] else False
+            # Metin sinyali istenen dillerden biriyle eşleşiyor mu?
+            lang_ok = rec["detected_lang"] in wanted_langs if rec["detected_lang"] else False
+            if not (country_ok or lang_ok):
+                # Ne ülke ne dil eşleşmiyor. Eğer creator hakkında HİÇ sinyal
+                # yoksa (ülke boş + dil tespiti boş) dahil et (actor veri
+                # vermeyince her şey elenmesin). Aksi halde ele.
+                if rec["country"] or rec["detected_lang"]:
                     continue
 
         seen[rec["username"]] = rec
@@ -249,15 +272,12 @@ def find_creators(cfg: dict) -> List[dict]:
 
 def save_csv(rows: List[dict], out_csv: str) -> None:
     import csv
+    fields = ["username", "nickname", "followers", "country", "lang", "email", "bio", "profile"]
     with open(out_csv, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(
-            f,
-            fieldnames=["username", "nickname", "followers", "country", "lang", "email", "bio", "profile"],
-        )
+        writer = csv.DictWriter(f, fieldnames=fields)
         writer.writeheader()
         for r in rows:
-            writer.writerow({k: r.get(k, "") for k in
-                             ["username", "nickname", "followers", "country", "lang", "email", "bio", "profile"]})
+            writer.writerow({k: r.get(k, "") for k in fields})
 
 
 def _cli() -> None:
