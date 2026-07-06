@@ -120,6 +120,10 @@
     <div class="card">
       <h2>Ayarlar</h2>
 
+      <label>Apify API Token</label>
+      <input id="apify_token" type="password" placeholder="apify_api_..." />
+      <p class="hint">Ücretsiz al: <a href="https://console.apify.com/account/integrations" target="_blank" rel="noopener">console.apify.com</a> → Settings → Integrations → API token. Bir kere kopyala, sabit kalır.</p>
+
       <label>Hashtag'ler (virgülle ayır)</label>
       <textarea id="hashtags" rows="3" placeholder="yemektarifi, gymtok, kombin"></textarea>
 
@@ -134,22 +138,10 @@
         </div>
       </div>
 
-      <div class="row">
-        <div>
-          <label>Min etkileşim (%)</label>
-          <input id="min_er" type="number" value="5" step="0.5" />
-        </div>
-        <div>
-          <label>Hedef sayı</label>
-          <input id="target" type="number" value="100" />
-        </div>
-      </div>
+      <label>Hedef sayı</label>
+      <input id="target" type="number" value="100" />
 
-      <label>msToken (tarayıcıdan)</label>
-      <input id="ms_token" type="password" placeholder="msToken değerini yapıştır" />
-      <p class="hint">Nasıl alınır: TikTok'ta F12 → Application → Cookies → msToken. Detay README'de.</p>
-
-      <label>DM şablonu (<code>{name}</code> otomatik dolar)</label>
+      <label>DM şablonu (<code>{name}</code>, <code>{bio}</code> otomatik dolar)</label>
       <textarea id="template" rows="10"></textarea>
 
       <div style="margin-top:16px">
@@ -187,8 +179,8 @@
   if (CFG.min_followers) document.getElementById('min_followers').value = CFG.min_followers;
   if (CFG.max_followers) document.getElementById('max_followers').value = CFG.max_followers;
   if (CFG.target_count) document.getElementById('target').value = CFG.target_count;
-  if (CFG.ms_token && !String(CFG.ms_token).includes('YAPISTIR')) {
-    document.getElementById('ms_token').value = CFG.ms_token;
+  if (CFG.apify_token && !String(CFG.apify_token).includes('YAPISTIR')) {
+    document.getElementById('apify_token').value = CFG.apify_token;
   }
 
   function setStatus(msg, isErr) {
@@ -202,21 +194,22 @@
     const hashtags = document.getElementById('hashtags').value
       .split(',').map(s => s.trim().replace(/^#/, '')).filter(Boolean);
 
+    const token = document.getElementById('apify_token').value.trim();
+    if (!token) { setStatus('Apify API token gir.', true); return; }
     if (!hashtags.length) { setStatus('En az bir hashtag gir.', true); return; }
 
     const payload = {
+      apify_token: token,
       hashtags,
       min_followers: Number(document.getElementById('min_followers').value) || 5000,
       max_followers: Number(document.getElementById('max_followers').value) || 50000,
-      min_engagement_rate: (Number(document.getElementById('min_er').value) || 5) / 100,
       target_count: Number(document.getElementById('target').value) || 100,
-      ms_token: document.getElementById('ms_token').value.trim(),
       template: document.getElementById('template').value,
     };
 
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span> Taranıyor...';
-    setStatus('TikTok taranıyor, bu birkaç dakika sürebilir...');
+    setStatus('Apify üzerinden aranıyor, bu birkaç dakika sürebilir...');
 
     try {
       const res = await fetch('/api/search', {
@@ -251,11 +244,10 @@
         '<div class="creator-head">' +
           '<div>' +
             '<div class="creator-name">' + escapeHtml(c.nickname || c.username) + '</div>' +
-            '<div class="creator-sub">@' + escapeHtml(c.username) + ' · #' + escapeHtml(c.hashtag) + '</div>' +
+            '<div class="creator-sub">@' + escapeHtml(c.username) + '</div>' +
           '</div>' +
           '<div class="badges">' +
             '<span class="badge">' + formatNum(c.followers) + ' takipçi</span>' +
-            '<span class="badge er">ER ' + (c.engagement_rate*100).toFixed(1) + '%</span>' +
           '</div>' +
         '</div>' +
         '<div class="dm" id="dm-' + i + '">' + escapeHtml(c.message) + '</div>' +
@@ -278,11 +270,11 @@
   }
 
   function downloadCsv() {
-    const header = ['username','nickname','followers','engagement_rate','profile','hashtag'];
+    const header = ['username','nickname','followers','email','bio','profile'];
     const lines = [header.join(',')];
     CREATORS.forEach(c => {
       lines.push([c.username, '"'+(c.nickname||'').replace(/"/g,'""')+'"', c.followers,
-        c.engagement_rate, c.profile, c.hashtag].join(','));
+        c.email||'', '"'+(c.bio||'').replace(/"/g,'""').replace(/\n/g,' ')+'"', c.profile].join(','));
     });
     const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
