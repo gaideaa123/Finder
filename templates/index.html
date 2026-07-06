@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CaptionAI · İçerik Üretici Bulucu</title>
+<style>
+  :root {
+    --bg: #0b0b12;
+    --panel: #14141f;
+    --panel-2: #1b1b2a;
+    --border: #2a2a3c;
+    --text: #e9e9f2;
+    --muted: #a0a0b8;
+    --accent: #a855f7;
+    --accent-2: #ec4899;
+    --green: #22c55e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 28px 20px 80px; }
+  header { text-align: center; margin-bottom: 28px; }
+  .logo {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-size: 26px; font-weight: 800; letter-spacing: -0.02em;
+  }
+  .logo .dot {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: grid; place-items: center; font-size: 18px;
+  }
+  header p { color: var(--muted); margin: 8px 0 0; font-size: 14px; }
+
+  .grid { display: grid; grid-template-columns: 340px 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 18px; padding: 20px;
+  }
+  .card h2 { margin: 0 0 16px; font-size: 15px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+
+  label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
+  label:first-of-type { margin-top: 0; }
+  input, textarea {
+    width: 100%; background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--text); border-radius: 10px; padding: 10px 12px; font-size: 14px;
+    font-family: inherit; resize: vertical;
+  }
+  input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  .row { display: flex; gap: 10px; }
+  .row > div { flex: 1; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    border: none; cursor: pointer; border-radius: 12px; font-weight: 700;
+    font-size: 15px; padding: 13px 18px; width: 100%; color: white;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    transition: transform .12s ease, opacity .2s ease;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+  .btn.secondary { background: var(--panel-2); border: 1px solid var(--border); }
+  .btn.small { width: auto; padding: 8px 14px; font-size: 13px; }
+
+  .hint { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+  .hint a { color: var(--accent); }
+
+  .status { margin: 16px 0; font-size: 14px; color: var(--muted); min-height: 20px; }
+  .status.err { color: var(--accent-2); }
+
+  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 12px; flex-wrap: wrap; }
+  .count-pill {
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px;
+    padding: 6px 14px; font-size: 13px; font-weight: 700;
+  }
+
+  .creators { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+  .creator {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 16px;
+    padding: 16px; display: flex; flex-direction: column; gap: 12px;
+  }
+  .creator-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .creator-name { font-weight: 800; font-size: 16px; }
+  .creator-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .badges { display: flex; gap: 6px; flex-wrap: wrap; }
+  .badge { font-size: 11px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px; padding: 4px 9px; color: var(--muted); }
+  .badge.er { color: var(--green); border-color: rgba(34,197,94,.35); }
+
+  .dm { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; min-height: 90px; max-height: 200px; overflow-y: auto; }
+  .creator-actions { display: flex; gap: 8px; }
+  .creator-actions .btn { flex: 1; }
+  .copied { background: var(--green) !important; }
+
+  .empty { text-align: center; color: var(--muted); padding: 60px 20px; }
+  .empty .big { font-size: 40px; margin-bottom: 12px; }
+
+  .spinner {
+    width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.3);
+    border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo"><span class="dot">\U0001F50E</span> CaptionAI Finder</div>
+    <p>TikTok'ta ni\u015fine uygun i\u00e7erik \u00fcreticileri bul, her birine ki\u015fiye \u00f6zel DM'i haz\u0131r al.</p>
+  </header>
+
+  <div class="grid">
+    <!-- SOL: Ayarlar -->
+    <div class="card">
+      <h2>Ayarlar</h2>
+
+      <label>Hashtag'ler (virg\u00fclle ay\u0131r)</label>
+      <textarea id="hashtags" rows="3" placeholder="yemektarifi, gymtok, kombin"></textarea>
+
+      <div class="row">
+        <div>
+          <label>Min takip\u00e7i</label>
+          <input id="min_followers" type="number" value="5000" />
+        </div>
+        <div>
+          <label>Max takip\u00e7i</label>
+          <input id="max_followers" type="number" value="50000" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Min etkile\u015fim (%)</label>
+          <input id="min_er" type="number" value="5" step="0.5" />
+        </div>
+        <div>
+          <label>Hedef say\u0131</label>
+          <input id="target" type="number" value="100" />
+        </div>
+      </div>
+
+      <label>msToken (taray\u0131c\u0131dan)</label>
+      <input id="ms_token" type="password" placeholder="msToken de\u011ferini yap\u0131\u015ft\u0131r" />
+      <p class="hint">Nas\u0131l al\u0131n\u0131r: TikTok'ta F12 \u2192 Application \u2192 Cookies \u2192 msToken. Detay README'de.</p>
+
+      <label>DM \u015fablonu (<code>{name}</code> otomatik dolar)</label>
+      <textarea id="template" rows="10"></textarea>
+
+      <div style="margin-top:16px">
+        <button class="btn" id="searchBtn" onclick="runSearch()">\U0001F680 \u00dcreticileri Bul</button>
+      </div>
+      <div class="status" id="status"></div>
+    </div>
+
+    <!-- SA\u011e: Sonu\u00e7lar -->
+    <div class="card">
+      <div class="toolbar">
+        <h2 style="margin:0">Bulunan \u00dcreticiler</h2>
+        <div style="display:flex; gap:10px; align-items:center">
+          <span class="count-pill" id="countPill">0 ki\u015fi</span>
+          <button class="btn secondary small" id="csvBtn" onclick="downloadCsv()" disabled>CSV \u0130ndir</button>
+        </div>
+      </div>
+      <div class="creators" id="results"></div>
+      <div class="empty" id="empty">
+        <div class="big">\U0001F440</div>
+        Hen\u00fcz sonu\u00e7 yok. Soldan ayarlar\u0131 girip <b>\u00dcreticileri Bul</b>'a bas.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const DEFAULT_TEMPLATE = {{ default_template|tojson }};
+  const CFG = {{ cfg|tojson }};
+  let CREATORS = [];
+
+  // On-doldur
+  document.getElementById('template').value = DEFAULT_TEMPLATE;
+  if (CFG.hashtags) document.getElementById('hashtags').value = CFG.hashtags.join(', ');
+  if (CFG.min_followers) document.getElementById('min_followers').value = CFG.min_followers;
+  if (CFG.max_followers) document.getElementById('max_followers').value = CFG.max_followers;
+  if (CFG.target_count) document.getElementById('target').value = CFG.target_count;
+  if (CFG.ms_token && !String(CFG.ms_token).includes('YAPISTIR')) {
+    document.getElementById('ms_token').value = CFG.ms_token;
+  }
+
+  function setStatus(msg, isErr) {
+    const el = document.getElementById('status');
+    el.textContent = msg;
+    el.className = 'status' + (isErr ? ' err' : '');
+  }
+
+  async function runSearch() {
+    const btn = document.getElementById('searchBtn');
+    const hashtags = document.getElementById('hashtags').value
+      .split(',').map(s => s.trim().replace(/^#/, '')).filter(Boolean);
+
+    if (!hashtags.length) { setStatus('En az bir hashtag gir.', true); return; }
+
+    const payload = {
+      hashtags,
+      min_followers: Number(document.getElementById('min_followers').value) || 5000,
+      max_followers: Number(document.getElementById('max_followers').value) || 50000,
+      min_engagement_rate: (Number(document.getElementById('min_er').value) || 5) / 100,
+      target_count: Number(document.getElementById('target').value) || 100,
+      ms_token: document.getElementById('ms_token').value.trim(),
+      template: document.getElementById('template').value,
+    };
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Taran\u0131yor...';
+    setStatus('TikTok taran\u0131yor, bu birka\u00e7 dakika s\u00fcrebilir...');
+
+    try {
+      const res = await fetch('/api/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Bilinmeyen hata');
+      CREATORS = data.creators;
+      render();
+      setStatus(`Tamam! ${data.count} \u00fcretici bulundu.`);
+    } catch (e) {
+      setStatus('Hata: ' + e.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '\U0001F680 \u00dcreticileri Bul';
+    }
+  }
+
+  function render() {
+    const wrap = document.getElementById('results');
+    const empty = document.getElementById('empty');
+    document.getElementById('countPill').textContent = CREATORS.length + ' ki\u015fi';
+    document.getElementById('csvBtn').disabled = CREATORS.length === 0;
+
+    if (!CREATORS.length) { empty.style.display = 'block'; wrap.innerHTML = ''; return; }
+    empty.style.display = 'none';
+
+    wrap.innerHTML = CREATORS.map((c, i) => `
+      <div class="creator">
+        <div class="creator-head">
+          <div>
+            <div class="creator-name">${escapeHtml(c.nickname || c.username)}</div>
+            <div class="creator-sub">@${escapeHtml(c.username)} \u00b7 #${escapeHtml(c.hashtag)}</div>
+          </div>
+          <div class="badges">
+            <span class="badge">${formatNum(c.followers)} takip\u00e7i</span>
+            <span class="badge er">ER ${(c.engagement_rate*100).toFixed(1)}%</span>
+          </div>
+        </div>
+        <div class="dm" id="dm-${i}">${escapeHtml(c.message)}</div>
+        <div class="creator-actions">
+          <button class="btn small" onclick="copyDm(${i}, this)">\U0001F4CB Kopyala</button>
+          <a class="btn small secondary" href="${c.profile}" target="_blank" rel="noopener">\U0001F464 Profile Git</a>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function copyDm(i, btn) {
+    const text = CREATORS[i].message;
+    navigator.clipboard.writeText(text).then(() => {
+      const orig = btn.innerHTML;
+      btn.innerHTML = '\u2705 Kopyaland\u0131';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('copied'); }, 1500);
+    });
+  }
+
+  function downloadCsv() {
+    const header = ['username','nickname','followers','engagement_rate','profile','hashtag'];
+    const lines = [header.join(',')];
+    CREATORS.forEach(c => {
+      lines.push([c.username, '"'+(c.nickname||'').replace(/"/g,'""')+'"', c.followers,
+        c.engagement_rate, c.profile, c.hashtag].join(','));
+    });
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'creators.csv';
+    a.click();
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+  function formatNum(n) {
+    n = Number(n) || 0;
+    if (n >= 1000) return (n/1000).toFixed(1).replace('.0','') + 'K';
+    return String(n);
+  }
+</script>
+</body>
+</html>
