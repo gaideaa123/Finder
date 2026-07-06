@@ -1,24 +1,11 @@
-"""
-CaptionAI Finder - Tam Sistem (Apify + Gemini/Vertex + CRM + Email)
-==================================================================
-
-Calistir:  python app.py   ->  http://127.0.0.1:5000
-
-AI backend iki turlu:
-  - apikey  : aistudio.google.com/apikey (hizli, ucretsiz kota)
-  - vertex  : project + location + model (kota bitince gec). Vertex icin
-              `gcloud auth application-default login` ya da service-account json.
-
-TikTok DM gonderimi KULLANICIDA (insani, bansiz, linksiz). Email tam otomatik
-ve linkli (thecaptionai.com).
-"""
+"""CaptionAI Finder - Tam Sistem (Apify + Gemini/Vertex + CRM + Email)."""
 
 import os
 
 from flask import Flask, jsonify, render_template, request
 
 import crm
-from finder import find_creators, load_config, SUPPORTED_LANGS
+from finder import find_creators, load_config, SUPPORTED_LANGS, lang_for_country, country_to_iso
 from emailer import start_email_campaign, get_status as email_status, stop_campaign
 
 try:
@@ -31,10 +18,9 @@ crm.init_db()
 
 SITE_URL = "thecaptionai.com"
 
-# Runtime yapılandırma (panelden güncellenir)
 KEYS = {
     "apify": "",
-    "ai_backend": "apikey",   # 'apikey' | 'vertex'
+    "ai_backend": "apikey",
     "gemini": "",
     "vertex_project": "",
     "vertex_location": "",
@@ -46,26 +32,24 @@ PRODUCT_PITCH = (
     "with strong hooks + ready hashtags, in 6 languages. Built solo by a 16-year-old."
 )
 
-# AI yoksa kullanılacak insansı yedek DM (linksiz, bio'ya yönlendirir)
+# Duzgun, dogru Turkce/diller. Linksiz (DM). Email'de link _email_body ekler.
 FALLBACK = {
-    "tr": "selam {name}, videolarını takılıyorum \U0001F440 caption yazmak seni de sıkıyo mu? 16 yaşındayım tam bunun için bi araç yaptım, denersen bi söyle, link biomda",
-    "en": "hey {name}, been loving your stuff \U0001F440 does writing captions annoy you too? i'm 16 and built a lil tool for exactly that, lmk if you try it, link's in my bio",
-    "es": "hey {name}, me encanta tu contenido \U0001F440 ¿escribir captions también te aburre? tengo 16 e hice una herramienta para eso, dime si la pruebas, link en mi bio",
-    "de": "hey {name}, feier deinen content \U0001F440 nervt dich captions schreiben auch? bin 16 und hab ein tool gebaut, sag bescheid wenn du's testest, link in bio",
-    "fr": "hey {name}, j'adore ton contenu \U0001F440 écrire les légendes te saoule aussi? j'ai 16 ans et j'ai fait un outil pour ça, dis-moi si tu testes, lien dans ma bio",
-    "ar": "هاي {name}، أحب محتواك \U0001F440 كتابة الكابشن تزعجك؟ عمري 16 وسويت أداة لهذا، جربها وقلي، الرابط بالبايو",
+    "tr": "selam {name}, videolarini bir suredir takip ediyorum, tarzin cok iyi. caption yazmak beni hep zorluyordu, 16 yasindayim bunun icin kucuk bir arac yaptim: konuyu yaziyorsun saniyeler icinde 4 hazir caption veriyor. bir denersen fikrini cok merak ederim, link biomda",
+    "en": "hey {name}, been following your stuff for a bit and your style is great. writing captions always slowed me down, so at 16 i built a little tool for it: type the topic, get 4 ready captions in seconds. would love your honest take if you try it, link's in my bio",
+    "es": "hola {name}, sigo tu contenido hace un tiempo y tu estilo me encanta. escribir captions siempre me costaba, asi que con 16 anos hice una herramienta: escribes el tema y te da 4 captions en segundos. me encantaria tu opinion si la pruebas, link en mi bio",
+    "de": "hey {name}, verfolge deinen content schon eine weile, dein stil ist top. captions schreiben hat mich immer aufgehalten, also hab ich mit 16 ein kleines tool gebaut: thema eingeben, in sekunden 4 fertige captions. wurde mich uber dein ehrliches feedback freuen, link in bio",
+    "fr": "hey {name}, je suis ton contenu depuis un moment, ton style est top. ecrire les legendes me ralentissait toujours, alors a 16 ans j'ai fait un petit outil: tu tapes le sujet, 4 legendes pretes en secondes. ton avis m'interesse si tu testes, lien dans ma bio",
+    "ar": "مرحبا {name}، أتابع محتواك من فترة وأسلوبك رائع. كتابة الكابشن كانت دائما تبطئني، فصنعت أداة صغيرة وعمري 16: تكتب الموضوع وتعطيك 4 كابشنات جاهزة بثواني. يهمني رأيك لو جربتها، الرابط بالبايو",
 }
 
 
-def _fallback_dm(creator: dict, channel: str = "dm") -> str:
+def _fallback_dm(creator, channel="dm"):
     lang = creator.get("lang", "en")
     tpl = FALLBACK.get(lang, FALLBACK["en"])
     msg = tpl.replace("{name}", creator.get("nickname") or creator.get("username", ""))
     if channel == "email":
-        # Email'de link olur
-        msg = msg.replace("link biomda", SITE_URL).replace("link's in my bio", SITE_URL) \
-                 .replace("link en mi bio", SITE_URL).replace("link in bio", SITE_URL) \
-                 .replace("lien dans ma bio", SITE_URL).replace("الرابط بالبايو", SITE_URL)
+        for tag in ["link biomda", "link's in my bio", "link en mi bio", "link in bio", "lien dans ma bio", "الرابط بالبايو"]:
+            msg = msg.replace(tag, SITE_URL)
     return msg
 
 
@@ -75,8 +59,7 @@ def _brain():
     try:
         if KEYS.get("ai_backend") == "vertex" and KEYS.get("vertex_project"):
             return AIBrain(backend="vertex", project=KEYS["vertex_project"],
-                           location=KEYS.get("vertex_location", ""),
-                           model=KEYS.get("vertex_model", ""))
+                           location=KEYS.get("vertex_location", ""), model=KEYS.get("vertex_model", ""))
         if KEYS.get("gemini"):
             return AIBrain(backend="apikey", api_key=KEYS["gemini"])
     except Exception:
@@ -84,12 +67,11 @@ def _brain():
     return None
 
 
-def _email_body(creator: dict) -> str:
+def _email_body(creator):
     brain = _brain()
     if brain:
         try:
-            return brain.generate_dm(creator, creator.get("lang", "en"), PRODUCT_PITCH,
-                                     link_url=SITE_URL, channel="email")
+            return brain.generate_dm(creator, creator.get("lang", "en"), PRODUCT_PITCH, link_url=SITE_URL, channel="email")
         except Exception:
             pass
     return _fallback_dm(creator, channel="email")
@@ -110,9 +92,22 @@ def api_keys():
     for k in ("apify", "gemini", "ai_backend", "vertex_project", "vertex_location", "vertex_model"):
         if k in data:
             KEYS[k] = (data.get(k) or "").strip()
-    ai_ok = bool(KEYS.get("gemini")) or bool(KEYS.get("vertex_project"))
+    # AI'yi GERCEKTEN test et (ping). Boylece 'AI: ok' sadece calisiyorsa yesil olur.
+    ai_ok, ai_err = False, ""
+    brain = _brain()
+    if brain:
+        try:
+            ai_ok = brain.ping()
+            if not ai_ok:
+                ai_err = "AI yanit vermedi (model/anahtar?)."
+        except QuotaError:
+            ai_err = "Kota bitti."
+        except Exception as e:  # noqa: BLE001
+            ai_err = str(e)[:200]
+    else:
+        ai_err = "Anahtar/kurulum yok."
     return jsonify({"ok": True, "has_apify": bool(KEYS["apify"]), "has_ai": ai_ok,
-                    "backend": KEYS.get("ai_backend")})
+                    "backend": KEYS.get("ai_backend"), "ai_error": ai_err})
 
 
 @app.route("/api/search", methods=["POST"])
@@ -127,11 +122,12 @@ def api_search():
     except Exception:
         base = {}
 
+    countries = data.get("countries") or []
     cfg = {
         "apify_token": token,
         "apify_actor": data.get("apify_actor") or base.get("apify_actor", "paxiq~tiktok-influencer-scraper"),
         "hashtags": data.get("hashtags") or [],
-        "countries": data.get("countries") or [],
+        "countries": countries,
         "min_followers": data.get("min_followers", 3000),
         "max_followers": data.get("max_followers", 80000),
         "target_count": data.get("target_count", 100),
@@ -146,6 +142,14 @@ def api_search():
         msg = str(e)
         need = any(k in msg.lower() for k in ["401", "403", "token", "unauthorized", "payment", "quota", "insufficient"])
         return jsonify({"ok": False, "error": msg, "need_key": need}), 400
+
+    # TEK ulke/dil secildiyse: sinyalsiz creator'lari o dile zorla (TR secince EN yazilmasin)
+    isos = {country_to_iso(c) for c in countries if country_to_iso(c)}
+    forced_lang = lang_for_country(list(isos)[0]) if len(isos) == 1 else ""
+    if forced_lang:
+        for r in rows:
+            if not r.get("detected_lang"):
+                r["lang"] = forced_lang
 
     known = crm.known_usernames()
     fresh = [r for r in rows if r["username"].lower() not in known]
@@ -194,7 +198,6 @@ def api_ai_dm():
         return jsonify({"ok": False, "error": str(e)}), 400
 
 
-# --- Metin bazlı uygunluk (profil görseli GEREKMEZ) ---
 @app.route("/api/ai/fit", methods=["POST"])
 def api_ai_fit():
     data = request.get_json(force=True) or {}
