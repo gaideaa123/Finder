@@ -41,6 +41,11 @@
   .btn.secondary { background: var(--panel-2); border: 1px solid var(--border); }
   .btn.small { width: auto; padding: 8px 14px; font-size: 13px; }
 
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { font-size: 12px; padding: 5px 10px; border-radius: 999px; cursor: pointer; user-select: none;
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); transition: all .15s ease; }
+  .chip:hover { border-color: var(--accent); color: var(--text); }
+
   .hint { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
   .hint a { color: var(--accent); }
 
@@ -93,15 +98,17 @@
       <p class="hint">Ücretsiz al: <a href="https://console.apify.com/account/integrations" target="_blank" rel="noopener">console.apify.com</a> → API token.</p>
 
       <label>Hashtag'ler (virgülle ayır)</label>
-      <textarea id="hashtags" rows="2" placeholder="yemektarifi, gymtok, kombin"></textarea>
+      <textarea id="hashtags" rows="3" placeholder="yemektarifi, gymtok, kombin"></textarea>
+      <div class="chips" id="hashtagChips"></div>
+      <p class="hint">Nişe tıkla, hashtag'ler kutuya eklenir. Bunlar CaptionAI için seçildi: sık paylaşan, caption'a ihtiyacı olan nişler.</p>
 
       <label>Ülkeler (virgülle ayır, boş = hepsi)</label>
       <input id="countries" placeholder="Türkiye, Almanya, ABD" />
-      <p class="hint">Örn. "Türkiye" yazarsan sadece Türk creator'lar gelir. Boş bırakırsan hepsi.</p>
+      <p class="hint">"Türkiye" yazarsan sadece Türk creator'lar gelir.</p>
 
       <div class="row">
-        <div><label>Min takipçi</label><input id="min_followers" type="number" value="5000" /></div>
-        <div><label>Max takipçi</label><input id="max_followers" type="number" value="50000" /></div>
+        <div><label>Min takipçi</label><input id="min_followers" type="number" value="3000" /></div>
+        <div><label>Max takipçi</label><input id="max_followers" type="number" value="80000" /></div>
       </div>
 
       <label>Hedef sayı</label>
@@ -109,8 +116,8 @@
 
       <label>DM şablonu (<code>{name}</code>, <code>{bio}</code> otomatik dolar)</label>
       <div class="tabs">
-        <div class="tab active" id="tab-tr" onclick="switchTab('tr')">🇹🇷 Türkçe (Türkler)</div>
-        <div class="tab" id="tab-en" onclick="switchTab('en')">🌍 İngilizce (Yabancılar)</div>
+        <div class="tab active" id="tab-tr" onclick="switchTab('tr')">🇹🇷 Türkçe</div>
+        <div class="tab" id="tab-en" onclick="switchTab('en')">🌍 İngilizce</div>
       </div>
       <textarea id="template_tr" rows="9"></textarea>
       <textarea id="template_en" rows="9" style="display:none"></textarea>
@@ -145,16 +152,45 @@
   const CFG = {{ cfg|tojson }};
   let CREATORS = [];
 
+  // CaptionAI icin optimize niş grupları (caption'a ihtiyacı yüksek, sık paylaşan).
+  const NICHE_CHIPS = {
+    "🍽️ Yemek": ["yemektarifi", "evyemekleri", "tarifpaylaşımı", "foodtiktok"],
+    "📹 Vlog": ["günlükvlog", "vloglife", "vlogtürkçe"],
+    "💄 Moda/Makyaj": ["kombin", "makyaj", "ciltbakımı", "stiltavsiyesi"],
+    "💪 Fitness": ["spormotivasyon", "gymtok", "fitlife", "antrenman"],
+    "✈️ Gezi": ["gezilecekyerler", "seyahat", "kampçılık"],
+    "🧠 Bilgi/Eğitim": ["bilgipaylaşımı", "kişiselgelişim", "öğrenmekeyifli"],
+    "🛒 Küçük İşletme": ["küçükişletme", "elemeği", "kendiişini"]
+  };
+
   // Ön-doldur
   document.getElementById('template_tr').value = DEFAULT_TR;
   document.getElementById('template_en').value = DEFAULT_EN;
-  if (CFG.hashtags) document.getElementById('hashtags').value = CFG.hashtags.join(', ');
+  document.getElementById('hashtags').value = (CFG.hashtags && CFG.hashtags.length)
+    ? CFG.hashtags.join(', ')
+    : 'yemektarifi, evyemekleri, günlükvlog, kombin, makyaj, spormotivasyon, gymtok, gezilecekyerler, bilgipaylaşımı, küçükişletme';
   if (CFG.countries) document.getElementById('countries').value = CFG.countries.join(', ');
   if (CFG.min_followers) document.getElementById('min_followers').value = CFG.min_followers;
   if (CFG.max_followers) document.getElementById('max_followers').value = CFG.max_followers;
   if (CFG.target_count) document.getElementById('target').value = CFG.target_count;
   if (CFG.apify_token && !String(CFG.apify_token).includes('YAPISTIR')) {
     document.getElementById('apify_token').value = CFG.apify_token;
+  }
+
+  // Niş çiplerini oluştur
+  (function buildChips() {
+    const box = document.getElementById('hashtagChips');
+    box.innerHTML = Object.keys(NICHE_CHIPS).map(k =>
+      '<span class="chip" onclick="addNiche(\'' + k.replace(/'/g, "\\'") + '\')">' + k + '</span>'
+    ).join('');
+  })();
+
+  function addNiche(key) {
+    const tags = NICHE_CHIPS[key] || [];
+    const el = document.getElementById('hashtags');
+    const existing = new Set(el.value.split(',').map(s => s.trim().replace(/^#/, '')).filter(Boolean));
+    tags.forEach(t => existing.add(t));
+    el.value = Array.from(existing).join(', ');
   }
 
   function switchTab(which) {
@@ -181,10 +217,9 @@
     if (!hashtags.length) { setStatus('En az bir hashtag gir.', true); return; }
 
     const payload = {
-      apify_token: token,
-      hashtags, countries,
-      min_followers: Number(document.getElementById('min_followers').value) || 5000,
-      max_followers: Number(document.getElementById('max_followers').value) || 50000,
+      apify_token: token, hashtags, countries,
+      min_followers: Number(document.getElementById('min_followers').value) || 3000,
+      max_followers: Number(document.getElementById('max_followers').value) || 80000,
       target_count: Number(document.getElementById('target').value) || 100,
       template_tr: document.getElementById('template_tr').value,
       template_en: document.getElementById('template_en').value,
@@ -241,7 +276,6 @@
     ).join('');
   }
 
-  // Tek tık: metni panoya kopyala + profili yeni sekmede aç. Sadece yapıştırman kalır.
   function sendDm(i, btn) {
     const c = CREATORS[i];
     navigator.clipboard.writeText(c.message).then(() => {
