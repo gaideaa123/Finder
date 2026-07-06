@@ -2,9 +2,8 @@
 CaptionAI - İçerik Üretici Bulucu (Apify tabanlı)
 =================================================
 
-Neden Apify? TikTok'un kendi kazımayı engelleme sistemi (msToken saniyede
-değişiyor, Playwright kırılıyor) yüzünden doğrudan kazıma güvenilmez. Apify
-bu savaşı bizim yerimize veriyor: sabit bir API token'ı ile hashtag'den
+Neden Apify? TikTok kazımayı bilerek engelliyor (msToken saniyede değişiyor).
+Apify bu savaşı bizim yerimize veriyor: sabit API token'ı ile hashtag'den
 creator listesi çekiyoruz. Native derleme (C++/greenlet) gerektirmez.
 
 Hem CLI (python finder.py) hem web GUI (app.py) bu dosyayı kullanır.
@@ -13,6 +12,7 @@ Ana fonksiyon: find_creators(cfg) -> list[dict]
 
 import json
 import os
+import re
 from typing import Dict, List, Optional
 
 import requests
@@ -21,8 +21,6 @@ APIFY_BASE = "https://api.apify.com/v2"
 
 
 # --- Ülke -> dil eşlemesi ------------------------------------------------
-# Creator'ın ülkesine göre hangi dilde DM yazılacağını belirler.
-# GUI'de bu 'lang' kodu ilgili şablonu seçer. Listede olmayan ülke -> 'en'.
 COUNTRY_LANG = {
     "TR": "tr",
     "US": "en", "GB": "en", "CA": "en", "AU": "en", "IE": "en", "NZ": "en",
@@ -30,17 +28,13 @@ COUNTRY_LANG = {
     "FR": "fr", "BE": "fr",
     "ES": "es", "MX": "es", "AR": "es", "CO": "es", "CL": "es", "PE": "es",
     "SA": "ar", "AE": "ar", "EG": "ar", "IQ": "ar", "JO": "ar", "MA": "ar",
-    "IT": "it",
-    "PT": "pt", "BR": "pt",
-    "NL": "nl",
-    "RU": "ru",
+    "IT": "it", "PT": "pt", "BR": "pt", "NL": "nl", "RU": "ru",
 }
 
-# İnsan-okunur ülke adı -> ISO2 kodu (GUI'den "Türkiye" gibi girilebilsin).
 COUNTRY_NAME_TO_ISO = {
-    "turkiye": "TR", "türkiye": "TR", "turkey": "TR", "tr": "TR",
+    "turkiye": "TR", "türkiye": "TR", "turkey": "TR", "tr": "TR", "turkce": "TR", "türkçe": "TR",
     "amerika": "US", "abd": "US", "usa": "US", "united states": "US", "us": "US",
-    "ingiltere": "GB", "birlesik krallik": "GB", "uk": "GB", "united kingdom": "GB", "gb": "GB",
+    "ingiltere": "GB", "uk": "GB", "united kingdom": "GB", "gb": "GB",
     "almanya": "DE", "germany": "DE", "de": "DE",
     "fransa": "FR", "france": "FR", "fr": "FR",
     "ispanya": "ES", "spain": "ES", "es": "ES",
@@ -58,12 +52,21 @@ COUNTRY_NAME_TO_ISO = {
     "misir": "EG", "mısır": "EG", "egypt": "EG", "eg": "EG",
 }
 
+# Türkçe'ye özgü karakterler ve sık kelimeler (metinden ülke/dil çıkarımı için).
+TURKISH_CHARS = set("ışğüöçİ")
+TURKISH_WORDS = {
+    "ve", "bir", "için", "ile", "çok", "video", "takip", "içerik", "günlük",
+    "tarif", "yemek", "moda", "gezi", "seyahat", "spor", "komik", "eğlence",
+    "iş", "birlikte", "kanal", "abone", "merhaba", "selam", "türkiye", "türk",
+    "öğrenci", "anne", "hayat", "aşk", "sizin", "benim",
+}
+
 
 def country_to_iso(value: str) -> Optional[str]:
     if not value:
         return None
     v = str(value).strip().lower()
-    if len(v) == 2:
+    if len(v) == 2 and v.isalpha():
         return v.upper()
     return COUNTRY_NAME_TO_ISO.get(v)
 
@@ -74,14 +77,23 @@ def lang_for_country(iso: Optional[str]) -> str:
     return COUNTRY_LANG.get(iso.upper(), "en")
 
 
+def looks_turkish(text: str) -> bool:
+    """Metinde güçlü Türkçe sinyali var mı? (karakter veya kelime)"""
+    if not text:
+        return False
+    low = text.lower()
+    if any(ch in TURKISH_CHARS for ch in text):
+        return True
+    tokens = set(re.findall(r"[a-zçğıöşü]+", low))
+    return len(tokens & TURKISH_WORDS) >= 1
+
+
 def load_config(path: Optional[str] = None) -> dict:
     if path is None:
         path = "config.json" if os.path.exists("config.json") else "config.example.json"
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
-
-# --- Esnek alan çözümleyiciler ------------------------------------------
 
 def _first(d: dict, keys: List[str], default=None):
     for k in keys:
@@ -102,7 +114,6 @@ def _first(d: dict, keys: List[str], default=None):
 
 
 def normalize_item(item: dict) -> Optional[dict]:
-    """Bir Apify sonucunu normalize edilmiş kayıta indirger."""
     username = _first(
         item,
         ["username", "handle", "uniqueId", "authorMeta.name", "author.uniqueId", "userName"],
@@ -129,14 +140,26 @@ def normalize_item(item: dict) -> Optional[dict]:
     bio = _first(item, ["bio", "signature", "authorMeta.signature", "description"], default="")
     email = _first(item, ["email", "authorMeta.email"], default="")
 
-    # Ülke / bölge: farklı actor'lar farklı alanlarda döndürür.
+    # 1) Actor'un döndürdüğü ülke (varsa)
     country_raw = _first(
         item,
         ["country", "region", "countryCode", "authorMeta.region", "author.region", "location"],
         default="",
     )
     iso = country_to_iso(country_raw)
-    lang = lang_for_country(iso)
+
+    # 2) Actor'un döndürdüğü dil (varsa)
+    lang_raw = _first(item, ["language", "lang", "authorMeta.language"], default="")
+    lang = str(lang_raw).lower()[:2] if lang_raw else ""
+
+    # 3) Metin bazlı çıkarım (ülke/dil bilinmiyorsa): bio + nickname
+    text_blob = f"{nickname} {bio}"
+    turkish_signal = looks_turkish(text_blob)
+
+    if not iso and turkish_signal:
+        iso = "TR"
+    if not lang:
+        lang = lang_for_country(iso) if iso else ("tr" if turkish_signal else "en")
 
     return {
         "username": username,
@@ -145,16 +168,13 @@ def normalize_item(item: dict) -> Optional[dict]:
         "bio": bio or "",
         "email": email or "",
         "country": iso or "",
-        "lang": lang,
+        "lang": lang or "en",
+        "turkish_signal": turkish_signal,
         "profile": f"https://www.tiktok.com/@{username}",
     }
 
 
 def find_creators(cfg: dict) -> List[dict]:
-    """
-    Apify actor'ını çalıştırıp normalize edilmiş creator listesi döner.
-    Takipçi bandı + (varsa) ülke listesine göre filtreler.
-    """
     token = cfg.get("apify_token", "")
     if not token or "YAPISTIR" in token:
         raise RuntimeError(
@@ -170,26 +190,24 @@ def find_creators(cfg: dict) -> List[dict]:
     max_f = int(cfg.get("max_followers", 50000))
     target = int(cfg.get("target_count", 100))
 
-    # İstenen ülkeler (ISO2 kümesi). Boşsa ülke filtresi uygulanmaz.
-    wanted_countries = set()
+    wanted = set()
     for c in cfg.get("countries", []) or []:
         iso = country_to_iso(c)
         if iso:
-            wanted_countries.add(iso)
+            wanted.add(iso)
+    only_turkey = wanted == {"TR"}
 
     actor_input = cfg.get("apify_input") or {
         "hashtags": hashtags,
         "minFollowers": min_f,
         "maxFollowers": max_f,
-        "maxItems": target * 3,  # ülke filtresinden sonra hedefe ulaşmak için bolca çek
+        "maxItems": target * 4,  # filtre sonrası hedefe ulaşmak için bolca çek
     }
-    # Actor ülke filtresini destekliyorsa ipucu ver (desteklemezse yok sayar).
-    if wanted_countries:
-        actor_input.setdefault("countries", sorted(wanted_countries))
+    if wanted:
+        actor_input.setdefault("countries", sorted(wanted))
 
     url = f"{APIFY_BASE}/acts/{actor}/run-sync-get-dataset-items"
     resp = requests.post(url, params={"token": token}, json=actor_input, timeout=600)
-
     if resp.status_code >= 400:
         raise RuntimeError(f"Apify hatasi ({resp.status_code}): {resp.text[:300]}")
 
@@ -207,11 +225,21 @@ def find_creators(cfg: dict) -> List[dict]:
         f = rec["followers"]
         if f and (f < min_f or f > max_f):
             continue
-        # Ülke filtresi: istenen ülke listesi varsa ve creator'ın ülkesi
-        # biliniyorsa, listede değilse ele. (Ülke bilinmiyorsa dahil edilir
-        # ki actor ülke döndürmediğinde her şey elenmesin.)
-        if wanted_countries and rec["country"] and rec["country"] not in wanted_countries:
-            continue
+
+        # --- Ülke filtresi (artık gerçekten eliyor) ---
+        if wanted:
+            if only_turkey:
+                # Sadece Türkiye: ülke TR olmalı YA DA güçlü Türkçe sinyali olmalı.
+                # (Actor ülke döndürmese bile metinden Türk creator'ı yakalar,
+                #  yabancıları eler.)
+                if rec["country"] != "TR" and not rec["turkish_signal"]:
+                    continue
+            else:
+                # Belirli ülke(ler): ülke biliniyorsa listede olmalı.
+                # Bilinmiyorsa dahil et (actor ülke vermeyince her şey elenmesin).
+                if rec["country"] and rec["country"] not in wanted:
+                    continue
+
         seen[rec["username"]] = rec
         if len(seen) >= target:
             break
@@ -227,7 +255,9 @@ def save_csv(rows: List[dict], out_csv: str) -> None:
             fieldnames=["username", "nickname", "followers", "country", "lang", "email", "bio", "profile"],
         )
         writer.writeheader()
-        writer.writerows(rows)
+        for r in rows:
+            writer.writerow({k: r.get(k, "") for k in
+                             ["username", "nickname", "followers", "country", "lang", "email", "bio", "profile"]})
 
 
 def _cli() -> None:
