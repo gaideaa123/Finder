@@ -9,14 +9,14 @@
     --text:#e9e9f2; --muted:#a0a0b8; --accent:#a855f7; --accent-2:#ec4899; --green:#22c55e; --red:#ef4444; --amber:#f59e0b; }
   * { box-sizing:border-box; }
   body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--text); }
-  .wrap { max-width:1240px; margin:0 auto; padding:24px 20px 80px; }
+  .wrap { max-width:1280px; margin:0 auto; padding:24px 20px 80px; }
   header { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; flex-wrap:wrap; gap:12px; }
   .logo { display:inline-flex; align-items:center; gap:10px; font-size:22px; font-weight:800; }
   .logo .dot { width:32px; height:32px; border-radius:9px; background:linear-gradient(135deg,var(--accent),var(--accent-2)); display:grid; place-items:center; font-size:17px; }
   .keydot { font-size:12px; padding:5px 10px; border-radius:999px; background:var(--panel-2); border:1px solid var(--border); color:var(--muted); }
   .keydot.on { color:var(--green); border-color:rgba(34,197,94,.4); }
   .tabs { display:flex; gap:6px; margin-bottom:18px; flex-wrap:wrap; }
-  .tab { padding:10px 16px; border-radius:10px; cursor:pointer; font-weight:700; font-size:14px; background:var(--panel-2); border:1px solid var(--border); color:var(--muted); }
+  .tab { padding:10px 15px; border-radius:10px; cursor:pointer; font-weight:700; font-size:14px; background:var(--panel-2); border:1px solid var(--border); color:var(--muted); }
   .tab.active { background:linear-gradient(135deg,var(--accent),var(--accent-2)); color:white; border-color:transparent; }
   .card { background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:20px; margin-bottom:16px; }
   .card h2 { margin:0 0 14px; font-size:14px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
@@ -32,7 +32,7 @@
   .btn:hover { transform:translateY(-1px); }
   .btn:disabled { opacity:.5; cursor:not-allowed; transform:none; }
   .btn.secondary { background:var(--panel-2); border:1px solid var(--border); }
-  .btn.small { padding:7px 12px; font-size:13px; }
+  .btn.small { padding:7px 11px; font-size:13px; }
   .btn.full { width:100%; }
   .copied { background:var(--green) !important; }
   .countries { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
@@ -63,9 +63,13 @@
   .accitem { display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--panel-2); border:1px solid var(--border); border-radius:10px; padding:8px 12px; font-size:13px; }
   .accitem .x { cursor:pointer; color:var(--muted); }
   .accitem .x:hover { color:var(--red); }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:8px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { color:var(--muted); position:sticky; top:0; background:var(--panel); }
+  .tbl-wrap { max-height:60vh; overflow:auto; border:1px solid var(--border); border-radius:12px; }
   .modal { position:fixed; inset:0; background:rgba(0,0,0,.7); display:none; place-items:center; z-index:50; }
   .modal.on { display:grid; }
-  .modal .box { background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:24px; max-width:460px; width:92%; }
+  .modal .box { background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:24px; max-width:480px; width:92%; max-height:90vh; overflow-y:auto; }
   .spinner { width:15px; height:15px; border:2px solid rgba(255,255,255,.3); border-top-color:white; border-radius:50%; animation:spin .7s linear infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
   .hint { font-size:12px; color:var(--muted); margin-top:6px; line-height:1.5; }
@@ -76,25 +80,27 @@
 <body>
 <div class="wrap">
   <header>
-    <div class="logo"><span class="dot">🔎</span> CaptionAI Finder</div>
-    <div style="display:flex; gap:8px; align-items:center">
-      <span class="keydot" id="kd-apify">Apify: 0 key</span>
+    <div class="logo"><span class="dot">🧠</span> CaptionAI Finder</div>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+      <span class="keydot" id="kd-apify">Apify: 0</span>
+      <span class="keydot" id="kd-ai">AI: yok</span>
       <span class="keydot" id="kd-acc">Hesap: 0</span>
-      <button class="btn secondary small" onclick="openKeys()">🔑 Apify Key</button>
+      <button class="btn secondary small" onclick="openKeys()">🔑 Anahtarlar</button>
     </div>
   </header>
 
   <div class="tabs">
     <div class="tab active" data-t="search" onclick="tab('search')">🔎 Ara</div>
     <div class="tab" data-t="queue" onclick="tab('queue')">💬 DM Kuyruğu</div>
-    <div class="tab" data-t="email" onclick="tab('email')">✉️ Email Otomasyon</div>
+    <div class="tab" data-t="email" onclick="tab('email')">✉️ Email</div>
+    <div class="tab" data-t="db" onclick="tab('db')">🗄️ Database</div>
     <div class="tab" data-t="stats" onclick="tab('stats')">📊 Analiz</div>
   </div>
 
   <div id="pane-search">
     <div class="card">
       <h2>Hedefleme</h2>
-      <label>Ülke / Dil (tıkla seç)</label>
+      <label>Ülke / Dil</label>
       <div class="countries" id="countryBtns"></div>
       <label>Hashtag'ler (virgülle ayır)</label>
       <textarea id="hashtags" rows="2"></textarea>
@@ -109,8 +115,10 @@
       <div class="row" style="margin-top:14px">
         <div><button class="btn full" id="autoBtn" onclick="runAuto()">🤖 Auto-bul + Email</button></div>
         <div style="flex:0"><button class="btn secondary" id="findBtn" onclick="runFind()">Sadece Bul</button></div>
+        <div style="flex:0"><button class="btn secondary" onclick="stopAuto()">⏹ Auto Durdur</button></div>
       </div>
       <div class="status" id="searchStatus"></div>
+      <div class="status" id="autoStatus"></div>
     </div>
   </div>
 
@@ -125,7 +133,7 @@
   <div id="pane-email" class="hidden">
     <div class="card">
       <h2>Email Hesapları (30 dolunca sonrakine geçer)</h2>
-      <p class="hint">Gmail için <b>uygulama şifresi</b> (normal şifre değil): <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">myaccount.google.com/apppasswords</a>. Bir hesap günlük limite (30) ulaşınca otomatik sonraki hesaba geçer.</p>
+      <p class="hint">Gmail için <b>uygulama şifresi</b>: <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">myaccount.google.com/apppasswords</a></p>
       <div class="row">
         <div><label>Email</label><input id="acc_email" type="email" placeholder="hesap@gmail.com" /></div>
         <div><label>Uygulama şifresi</label><input id="acc_pass" type="password" placeholder="xxxx xxxx xxxx xxxx" /></div>
@@ -133,19 +141,29 @@
       <label>Gönderen adı (ops.)</label><input id="acc_name" type="text" placeholder="Alper - CaptionAI" />
       <button class="btn small" style="margin-top:10px" onclick="addAccount()">➕ Hesap Ekle</button>
       <div class="acclist" id="accList"></div>
-    </div>
-    <div class="card">
-      <h2>Kampanya</h2>
-      <div class="row">
-        <div><label>Sağlayıcı</label><select id="em_provider"><option value="gmail">Gmail</option><option value="outlook">Outlook</option><option value="yahoo">Yahoo</option></select></div>
-        <div><label>Hesap başı günlük limit</label><input id="em_limit" type="number" value="30" /></div>
-      </div>
-      <label>Konu</label><input id="em_subject" type="text" value="videoların için ufak bir şey" />
       <div class="row" style="margin-top:14px">
         <div><button class="btn full" onclick="startEmail()">▶️ Kampanyayı Başlat</button></div>
         <div style="flex:0"><button class="btn secondary" onclick="stopEmail()">⏹ Durdur</button></div>
       </div>
       <div class="status" id="emailStatus"></div>
+    </div>
+    <div class="card">
+      <h2>Gönderilen Email'ler</h2>
+      <button class="btn secondary small" onclick="loadSent()">↻ Yenile</button>
+      <div class="tbl-wrap" style="margin-top:10px"><table id="sentTbl"><thead><tr><th>Kisi</th><th>Email</th><th>Hesap</th><th>Tarih</th></tr></thead><tbody></tbody></table></div>
+    </div>
+  </div>
+
+  <div id="pane-db" class="hidden">
+    <div class="card">
+      <h2>Database (tüm kayıtlar)</h2>
+      <div class="row">
+        <div><input id="db_q" placeholder="🔍 ara (isim/@/email)" oninput="loadDb()" /></div>
+        <div style="flex:0"><select id="db_status" onchange="loadDb()"><option value="">Tüm durumlar</option><option value="queued">Kuyrukta</option><option value="sent">Gönderildi</option><option value="replied">Yanıtladı</option><option value="skipped">Atlandı</option></select></div>
+        <div style="flex:0"><button class="btn secondary small" onclick="loadDb()">↻</button></div>
+      </div>
+      <div class="tbl-wrap" style="margin-top:12px"><table id="dbTbl"><thead><tr><th>Kisi</th><th>Takipçi</th><th>Dil</th><th>Email</th><th>Durum</th><th>Aksiyon</th></tr></thead><tbody></tbody></table></div>
+      <p class="hint">“Tekrar Bul” bir kişiyi kuyruğa geri alır (yeniden bulunur/gönderilir). “Sil” tamamen kaldırır.</p>
     </div>
   </div>
 
@@ -157,105 +175,85 @@
 
 <div class="modal" id="keyModal">
   <div class="box">
-    <h2 style="margin-top:0" id="keyTitle">Apify API Key'leri</h2>
-    <p class="hint">Birden fazla key gir (her satıra bir tane). Biri bitince otomatik sonrakine geçer. <a href="https://console.apify.com/account/integrations" target="_blank" rel="noopener">console.apify.com</a></p>
-    <textarea id="k_apify" rows="5" placeholder="apify_api_xxx&#10;apify_api_yyy&#10;apify_api_zzz"></textarea>
+    <h2 style="margin-top:0">Anahtarlar</h2>
+    <label>Apify API Key'leri (her satıra bir tane, biri bitince digerine gecer)</label>
+    <textarea id="k_apify" rows="3" placeholder="apify_api_xxx&#10;apify_api_yyy"></textarea>
+    <p class="hint"><a href="https://console.apify.com/account/integrations" target="_blank" rel="noopener">console.apify.com</a></p>
+    <label>Groq AI Key'leri (hiper-özel DM/email için, ücretsiz + yüksek limit)</label>
+    <textarea id="k_groq" rows="3" placeholder="gsk_xxx&#10;gsk_yyy"></textarea>
+    <p class="hint">Ücretsiz al: <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a> (kredi kartı yok, günde ~14.400 istek)</p>
     <div style="display:flex; gap:8px; margin-top:14px">
-      <button class="btn full" onclick="saveKeys()">Kaydet</button>
+      <button class="btn full" onclick="saveKeys()">Kaydet & Test Et</button>
       <button class="btn secondary" onclick="closeKeys()">Kapat</button>
     </div>
+    <div class="status" id="keyStatus"></div>
   </div>
 </div>
 
 <script>
   const LANGS = {{ langs|tojson }};
-  let QUEUE = [];
-  let ACCOUNTS = [];
+  let QUEUE = [], ACCOUNTS = [];
   const COUNTRIES = { tr:{label:'🇹🇷 Türkçe',iso:'Türkiye'}, en:{label:'🇺🇸 İngilizce',iso:'ABD'}, es:{label:'🇪🇸 İspanyol',iso:'İspanya'}, de:{label:'🇩🇪 Almanca',iso:'Almanya'}, fr:{label:'🇫🇷 Fransızca',iso:'Fransa'}, ar:{label:'🇸🇦 Arapça',iso:'Arabistan'} };
-  const NICHE_CHIPS = {
-    tr:{'🍽️ Yemek':['yemektarifi','evyemekleri'],'📹 Vlog':['günlükvlog'],'💄 Moda':['kombin','makyaj'],'💪 Fitness':['spormotivasyon','gymtok'],'✈️ Gezi':['gezilecekyerler'],'🧠 Bilgi':['bilgipaylaşımı']},
-    en:{'🍽️ Food':['foodtiktok','recipe'],'📹 Vlog':['dailyvlog'],'💄 Fashion':['ootd','styletips'],'💪 Fitness':['gymtok','fittok'],'✈️ Travel':['traveltok'],'🧠 Info':['learnontiktok']},
-    es:{'🍽️ Comida':['recetas'],'📹 Vlog':['vlogdiario'],'💄 Moda':['moda','belleza'],'💪 Fitness':['gimnasio'],'✈️ Viajes':['viajes'],'🧠 Info':['aprende']},
-    de:{'🍽️ Essen':['rezepte'],'📹 Vlog':['vlog'],'💄 Mode':['mode','beauty'],'💪 Fitness':['fitness'],'✈️ Reisen':['reisen'],'🧠 Wissen':['lernen']},
-    fr:{'🍽️ Cuisine':['recette'],'📹 Vlog':['vlog'],'💄 Mode':['mode','beaute'],'💪 Fitness':['musculation'],'✈️ Voyage':['voyage'],'🧠 Info':['astuces']},
-    ar:{'🍽️ طعام':['وصفات'],'📹 فلوق':['فلوق'],'💄 موضة':['موضة'],'💪 لياقة':['رياضة'],'✈️ سفر':['سفر'],'🧠 معلومات':['معلومات']},
-  };
-  const DEFAULT_HASHTAGS = { tr:'yemektarifi, günlükvlog, kombin, gymtok, gezilecekyerler', en:'foodtiktok, dailyvlog, ootd, gymtok, traveltok', es:'recetas, vlogdiario, moda, gimnasio', de:'rezepte, vlog, mode, fitness', fr:'recette, vlog, mode, musculation', ar:'وصفات, فلوق, موضة, رياضة' };
+  const NICHE_CHIPS = { tr:{'🍽️ Yemek':['yemektarifi'],'📹 Vlog':['günlükvlog'],'💄 Moda':['kombin','makyaj'],'💪 Fitness':['gymtok'],'✈️ Gezi':['gezilecekyerler'],'🧠 Bilgi':['bilgipaylaşımı']}, en:{'🍽️ Food':['foodtiktok'],'📹 Vlog':['dailyvlog'],'💄 Fashion':['ootd'],'💪 Fitness':['gymtok'],'✈️ Travel':['traveltok'],'🧠 Info':['learnontiktok']}, es:{'🍽️ Comida':['recetas'],'📹 Vlog':['vlogdiario'],'💄 Moda':['moda']}, de:{'🍽️ Essen':['rezepte'],'💄 Mode':['mode']}, fr:{'🍽️ Cuisine':['recette'],'💄 Mode':['mode']}, ar:{'🍽️ طعام':['وصفات'],'💄 موضة':['موضة']} };
+  const DEFAULT_HASHTAGS = { tr:'yemektarifi, günlükvlog, kombin, gymtok, gezilecekyerler', en:'foodtiktok, dailyvlog, ootd, gymtok, traveltok', es:'recetas, vlogdiario, moda', de:'rezepte, vlog, mode', fr:'recette, vlog, mode', ar:'وصفات, فلوق, موضة' };
   const selectedCountries = new Set();
   document.getElementById('hashtags').value = DEFAULT_HASHTAGS.tr;
 
-  (function(){ document.getElementById('countryBtns').innerHTML = Object.keys(COUNTRIES).map(k=>'<div class="cbtn" id="c-'+k+'" onclick="toggleCountry(\''+k+'\')">'+COUNTRIES[k].label+'</div>').join(''); })();
+  (function(){ document.getElementById('countryBtns').innerHTML=Object.keys(COUNTRIES).map(k=>'<div class="cbtn" id="c-'+k+'" onclick="toggleCountry(\''+k+'\')">'+COUNTRIES[k].label+'</div>').join(''); })();
   function toggleCountry(k){ const el=document.getElementById('c-'+k); if(selectedCountries.has(k)){selectedCountries.delete(k);el.classList.remove('on');}else{selectedCountries.add(k);el.classList.add('on');} const f=selectedCountries.values().next().value; buildChips(f||'tr'); }
   function buildChips(lang){ const m=NICHE_CHIPS[lang]||NICHE_CHIPS.tr; document.getElementById('hashtagChips').innerHTML=Object.keys(m).map(k=>'<span class="chip" onclick="addNiche(\''+lang+'\',\''+k.replace(/'/g,"\\'")+'\')">'+k+'</span>').join(''); }
   buildChips('tr');
   function addNiche(lang,key){ const t=(NICHE_CHIPS[lang]||{})[key]||[]; const el=document.getElementById('hashtags'); const ex=new Set(el.value.split(',').map(s=>s.trim().replace(/^#/,'')).filter(Boolean)); t.forEach(x=>ex.add(x)); el.value=Array.from(ex).join(', '); }
 
-  function tab(t){ ['search','queue','email','stats'].forEach(x=>{ document.getElementById('pane-'+x).classList.toggle('hidden', x!==t); document.querySelector('.tab[data-t="'+x+'"]').classList.toggle('active', x===t); }); if(t==='queue') loadQueue(); if(t==='stats') loadStats(); if(t==='email') pollEmail(); }
+  function tab(t){ ['search','queue','email','db','stats'].forEach(x=>{ document.getElementById('pane-'+x).classList.toggle('hidden', x!==t); document.querySelector('.tab[data-t="'+x+'"]').classList.toggle('active', x===t); }); if(t==='queue') loadQueue(); if(t==='stats') loadStats(); if(t==='db') loadDb(); if(t==='email'){ pollEmail(); loadSent(); } }
 
   function openKeys(){ document.getElementById('keyModal').classList.add('on'); }
   function closeKeys(){ document.getElementById('keyModal').classList.remove('on'); }
-  async function saveKeys(){ const raw=document.getElementById('k_apify').value; const r=await fetch('/api/keys',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({apify_tokens:raw})}); const d=await r.json(); document.getElementById('kd-apify').textContent='Apify: '+d.apify_count+' key'; document.getElementById('kd-apify').classList.toggle('on',d.apify_count>0); closeKeys(); }
-
-  function payload(){ return { hashtags:document.getElementById('hashtags').value.split(',').map(s=>s.trim().replace(/^#/,'')).filter(Boolean), countries:Array.from(selectedCountries).map(k=>COUNTRIES[k].iso), min_followers:+document.getElementById('min_followers').value||3000, max_followers:+document.getElementById('max_followers').value||80000, target_count:+document.getElementById('target').value||60, strict_country:document.getElementById('strict_country').checked, require_email:document.getElementById('require_email').checked, subject:document.getElementById('em_subject')?document.getElementById('em_subject').value:'', daily_limit:+((document.getElementById('em_limit')||{}).value||30) }; }
-
-  async function runFind(){ await doSearch('/api/search','findBtn','Sadece Bul'); }
-  async function runAuto(){ await doSearch('/api/auto','autoBtn','🤖 Auto-bul + Email'); }
-  async function doSearch(url, btnId, btnLabel){
-    const p=payload();
-    if(!p.hashtags.length){ setS('searchStatus','En az bir hashtag gir.',true); return; }
-    const btn=document.getElementById(btnId); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Çalışıyor...';
-    setS('searchStatus','Apify tarıyor, birkaç dk sürebilir...');
-    try{ const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)}); const d=await r.json();
-      if(!d.ok){ if(d.need_key) openKeys(); throw new Error(d.error||'hata'); }
-      let msg='Tamam! '+d.count+' yeni kişi eklendi.';
-      if(url==='/api/auto'){ msg+=' Email\'li: '+d.with_email+'. '+(d.email_started?'Email kampanyası başladı ✅':('Email başlamadı: '+(d.email_error||'')));  }
-      setS('searchStatus',msg);
-    }catch(e){ setS('searchStatus','Hata: '+e.message,true); } finally{ btn.disabled=false; btn.innerHTML=btnLabel; }
+  async function saveKeys(){ setS('keyStatus','Test ediliyor...'); const r=await fetch('/api/keys',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({apify_tokens:document.getElementById('k_apify').value, groq_keys:document.getElementById('k_groq').value})}); const d=await r.json();
+    document.getElementById('kd-apify').textContent='Apify: '+d.apify_count; document.getElementById('kd-apify').classList.toggle('on',d.apify_count>0);
+    document.getElementById('kd-ai').textContent='AI: '+(d.ai_ok?'✓':(d.groq_count?'hata':'yok')); document.getElementById('kd-ai').classList.toggle('on',d.ai_ok);
+    setS('keyStatus', d.ai_ok?'AI calisiyor ✅':(d.ai_error||'Apify kaydedildi.'), !d.ai_ok && d.groq_count>0);
+    if(d.ai_ok || (d.apify_count>0 && !d.groq_count)) setTimeout(closeKeys,900);
   }
+
+  function payload(){ return { hashtags:document.getElementById('hashtags').value.split(',').map(s=>s.trim().replace(/^#/,'')).filter(Boolean), countries:Array.from(selectedCountries).map(k=>COUNTRIES[k].iso), min_followers:+document.getElementById('min_followers').value||3000, max_followers:+document.getElementById('max_followers').value||80000, target_count:+document.getElementById('target').value||60, strict_country:document.getElementById('strict_country').checked, require_email:document.getElementById('require_email').checked }; }
+
+  async function runFind(){ const p=payload(); if(!p.hashtags.length){ setS('searchStatus','Hashtag gir.',true); return; } const b=document.getElementById('findBtn'); b.disabled=true; b.innerHTML='<span class="spinner"></span>'; setS('searchStatus','Aranıyor...');
+    try{ const r=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)}); const d=await r.json(); if(!d.ok){ if(d.need_key) openKeys(); throw new Error(d.error); } setS('searchStatus','Tamam! '+d.count+' yeni kişi kuyruğa eklendi.'); }catch(e){ setS('searchStatus','Hata: '+e.message,true);} finally{ b.disabled=false; b.innerHTML='Sadece Bul'; } }
+
+  async function runAuto(){ const p=payload(); if(!p.hashtags.length){ setS('searchStatus','Hashtag gir.',true); return; } const r=await fetch('/api/auto',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)}); const d=await r.json(); if(!d.ok){ if(d.need_key) openKeys(); setS('searchStatus','Hata: '+d.error,true); return; } setS('searchStatus','Auto başladı 🤖'); pollAuto(); }
+  async function stopAuto(){ await fetch('/api/auto/stop',{method:'POST'}); setS('autoStatus','Auto durduruldu.'); }
+  let autoTimer=null;
+  async function pollAuto(){ clearInterval(autoTimer); const tick=async()=>{ const r=await fetch('/api/auto/status'); const d=await r.json(); const a=d.auto, e=d.email; setS('autoStatus', (a.running?'🤖 Auto çalışıyor':'⏸ Auto durdu')+' · tur '+a.rounds+' · bulunan '+a.found+(e.running?' · email '+e.sent+'/'+e.total+(e.active_account?' ('+e.active_account+')':''):'')+' · '+(a.last||'')); if(!a.running) clearInterval(autoTimer); }; tick(); autoTimer=setInterval(tick,3000); }
 
   async function loadQueue(){ setS('queueStatus','Yükleniyor...'); const r=await fetch('/api/queue?channel=dm'); const d=await r.json(); QUEUE=d.queue||[]; renderQueue(); setS('queueStatus',QUEUE.length+' kişi kuyrukta'); }
-  function renderQueue(){
-    const w=document.getElementById('queue');
-    if(!QUEUE.length){ w.innerHTML='<p style="color:var(--muted)">Kuyruk boş. "Ara" sekmesinden bul.</p>'; return; }
-    w.innerHTML=QUEUE.map((c,i)=>{
-      const mail=c.email?'<span class="badge mail" onclick="copyText(\''+c.email+'\',this)">✉️ '+esc(c.email)+'</span>':'';
-      return '<div class="creator">'+
-        '<button class="del" onclick="skipCard('+i+')">×</button>'+
-        '<div class="crow"><span class="cname">'+esc(c.nickname||c.username)+'</span>'+
-          '<span class="csub">@'+esc(c.username)+'</span>'+
-          '<span class="badge">'+fmt(c.followers)+' takipçi</span>'+
-          '<span class="badge lang">'+esc(c.lang||'en')+'</span>'+mail+'</div>'+
-        '<div class="dm">'+esc(c.message||'')+'</div>'+
-        '<div class="acts">'+
-          '<button class="btn small" onclick="sendDm('+i+',this)">💬 DM At</button>'+
-          '<button class="btn small secondary" onclick="copyText(QUEUE['+i+'].message,this)">📋 Kopyala</button>'+
-          '<button class="btn small secondary" onclick="askReply('+i+')">📝 Yanıt</button>'+
-        '</div></div>';
-    }).join('');
+  function renderQueue(){ const w=document.getElementById('queue'); if(!QUEUE.length){ w.innerHTML='<p style="color:var(--muted)">Kuyruk boş.</p>'; return; }
+    w.innerHTML=QUEUE.map((c,i)=>{ const mail=c.email?'<span class="badge mail" onclick="copyText(\''+c.email+'\',this)">✉️ '+esc(c.email)+'</span>':''; return '<div class="creator"><button class="del" onclick="skipCard('+i+')">×</button><div class="crow"><span class="cname">'+esc(c.nickname||c.username)+'</span><span class="csub">@'+esc(c.username)+'</span><span class="badge">'+fmt(c.followers)+' takipçi</span><span class="badge lang">'+esc(c.lang||'en')+'</span>'+mail+'</div><div class="dm">'+esc(c.message||'')+'</div><div class="acts"><button class="btn small" onclick="sendDm('+i+')">💬 DM At</button><button class="btn small secondary" onclick="copyText(QUEUE['+i+'].message,this)">📋 Kopyala</button><button class="btn small secondary" onclick="askReply('+i+')">📝 Yanıt</button></div></div>'; }).join('');
   }
-  async function sendDm(i,btn){ const c=QUEUE[i]; await navigator.clipboard.writeText(c.message||''); window.open(c.profile,'_blank','noopener'); await fetch('/api/sent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:c.username,message:c.message,channel:'dm'})}); QUEUE.splice(i,1); renderQueue(); }
+  async function sendDm(i){ const c=QUEUE[i]; await navigator.clipboard.writeText(c.message||''); window.open(c.profile,'_blank','noopener'); await fetch('/api/sent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:c.username,message:c.message,channel:'dm'})}); QUEUE.splice(i,1); renderQueue(); }
   async function skipCard(i){ const c=QUEUE[i]; await fetch('/api/skip',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:c.username})}); QUEUE.splice(i,1); renderQueue(); }
-  async function askReply(i){ const c=QUEUE[i]; const reply=prompt('Gelen yanıtı yapıştır:'); if(!reply) return; await fetch('/api/reply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:c.username,reply})}); alert('Kaydedildi.'); }
+  async function askReply(i){ const c=QUEUE[i]; const reply=prompt('Gelen yanıtı yapıştır:'); if(!reply) return; const r=await fetch('/api/reply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:c.username,dm:c.message,reply,lang:c.lang})}); const d=await r.json(); if(d.ok){ let m='Kaydedildi. '+(d.sentiment||''); if(d.suggested_reply) m+='\n\nÖneri:\n'+d.suggested_reply; alert(m); } }
 
-  // --- Email hesaplari ---
-  function renderAccts(){
-    document.getElementById('kd-acc').textContent='Hesap: '+ACCOUNTS.length;
-    document.getElementById('kd-acc').classList.toggle('on',ACCOUNTS.length>0);
-    document.getElementById('accList').innerHTML=ACCOUNTS.map((a,i)=>'<div class="accitem"><span>'+esc(a.email)+(a.from_name?' · '+esc(a.from_name):'')+'</span><span class="x" onclick="delAccount('+i+')">×</span></div>').join('');
-  }
-  async function pushAccounts(){ const r=await fetch('/api/email/accounts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accounts:ACCOUNTS})}); await r.json(); renderAccts(); }
-  function addAccount(){ const e=document.getElementById('acc_email').value.trim(); const p=document.getElementById('acc_pass').value.trim(); const n=document.getElementById('acc_name').value.trim(); if(!e||!p){ setS('emailStatus','Email + uygulama şifresi gir.',true); return; } ACCOUNTS.push({email:e,password:p,from_name:n}); document.getElementById('acc_email').value=''; document.getElementById('acc_pass').value=''; document.getElementById('acc_name').value=''; pushAccounts(); setS('emailStatus','Hesap eklendi ('+ACCOUNTS.length+').'); }
+  function renderAccts(){ document.getElementById('kd-acc').textContent='Hesap: '+ACCOUNTS.length; document.getElementById('kd-acc').classList.toggle('on',ACCOUNTS.length>0); document.getElementById('accList').innerHTML=ACCOUNTS.map((a,i)=>'<div class="accitem"><span>'+esc(a.email)+(a.from_name?' · '+esc(a.from_name):'')+'</span><span class="x" onclick="delAccount('+i+')">×</span></div>').join(''); }
+  async function pushAccounts(){ await fetch('/api/email/accounts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accounts:ACCOUNTS})}); renderAccts(); }
+  function addAccount(){ const e=document.getElementById('acc_email').value.trim(), p=document.getElementById('acc_pass').value.trim(), n=document.getElementById('acc_name').value.trim(); if(!e||!p){ setS('emailStatus','Email + şifre gir.',true); return; } ACCOUNTS.push({email:e,password:p,from_name:n}); document.getElementById('acc_email').value=''; document.getElementById('acc_pass').value=''; document.getElementById('acc_name').value=''; pushAccounts(); setS('emailStatus','Hesap eklendi.'); }
   function delAccount(i){ ACCOUNTS.splice(i,1); pushAccounts(); }
-
-  async function startEmail(){ if(!ACCOUNTS.length){ setS('emailStatus','Önce hesap ekle.',true); return; } await pushAccounts(); const r=await fetch('/api/email/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:document.getElementById('em_provider').value,subject:document.getElementById('em_subject').value.trim(),daily_limit:+document.getElementById('em_limit').value||30})}); const d=await r.json(); if(!d.ok){ setS('emailStatus','Hata: '+d.error,true); return; } setS('emailStatus','Kampanya başladı...'); pollEmail(); }
+  async function startEmail(){ if(!ACCOUNTS.length){ setS('emailStatus','Önce hesap ekle.',true); return; } await pushAccounts(); const r=await fetch('/api/email/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})}); const d=await r.json(); if(!d.ok){ setS('emailStatus','Hata: '+d.error,true); return; } setS('emailStatus','Başladı...'); pollEmail(); }
   async function stopEmail(){ await fetch('/api/email/stop',{method:'POST'}); setS('emailStatus','Durduruldu.'); }
   let emTimer=null;
-  async function pollEmail(){ clearInterval(emTimer); const tick=async()=>{ const r=await fetch('/api/email/status'); const d=await r.json(); const s=d.status; setS('emailStatus',(s.running?'▶️ Çalışıyor':'⏸ Durdu')+' · '+s.sent+'/'+s.total+(s.active_account?' · aktif: '+s.active_account:'')+(s.failed?' · hata '+s.failed:'')+(s.error?' · '+s.error:''), !!s.error && !s.running); if(!s.running) clearInterval(emTimer); }; tick(); emTimer=setInterval(tick,3000); }
+  async function pollEmail(){ clearInterval(emTimer); const tick=async()=>{ const r=await fetch('/api/email/status'); const d=await r.json(); const s=d.status; setS('emailStatus',(s.running?'▶️ Çalışıyor':'⏸ Durdu')+' · '+s.sent+'/'+s.total+(s.active_account?' · '+s.active_account:'')+(s.error?' · '+s.error:''), !!s.error&&!s.running); if(!s.running){ clearInterval(emTimer); loadSent(); } }; tick(); emTimer=setInterval(tick,3000); }
+
+  async function loadSent(){ const r=await fetch('/api/sent-emails'); const d=await r.json(); document.querySelector('#sentTbl tbody').innerHTML=(d.rows||[]).map(x=>'<tr><td>'+esc(x.nickname||x.username)+'</td><td>'+esc(x.email||'')+'</td><td>'+esc(x.sent_account||'')+'</td><td>'+esc((x.sent_at||'').slice(0,16).replace('T',' '))+'</td></tr>').join('')||'<tr><td colspan=4 style="color:var(--muted)">Henüz gönderilmedi</td></tr>'; }
+
+  async function loadDb(){ const q=document.getElementById('db_q').value.trim(); const st=document.getElementById('db_status').value; const r=await fetch('/api/db?q='+encodeURIComponent(q)+'&status='+encodeURIComponent(st)); const d=await r.json();
+    document.querySelector('#dbTbl tbody').innerHTML=(d.rows||[]).map(x=>'<tr><td>'+esc(x.nickname||x.username)+'<div class="csub">@'+esc(x.username)+'</div></td><td>'+fmt(x.followers)+'</td><td>'+esc(x.lang||'')+'</td><td>'+esc(x.email||'-')+'</td><td>'+esc(x.status||'')+'</td><td><button class="btn small secondary" onclick="requeue(\''+esc(x.username)+'\')">Tekrar Bul</button> <button class="btn small secondary" onclick="delRow(\''+esc(x.username)+'\')">Sil</button></td></tr>').join('')||'<tr><td colspan=6 style="color:var(--muted)">Kayıt yok</td></tr>'; }
+  async function requeue(u){ await fetch('/api/db/requeue',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u})}); loadDb(); }
+  async function delRow(u){ if(!confirm('@'+u+' silinsin mi? (bir daha bulunabilir olur)')) return; await fetch('/api/db/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u})}); loadDb(); }
 
   async function loadStats(){ const r=await fetch('/api/stats'); const d=await r.json(); const s=d.stats; document.getElementById('kpis').innerHTML=[['Toplam',s.total],['Gönderilen',s.sent],['Yanıt',s.replied],['Yanıt Oranı',s.reply_rate+'%'],['Kuyruk',s.queued],['Email\'li',s.with_email],['Bugün DM',s.sent_today_dm],['Bugün Email',s.sent_today_email]].map(([l,n])=>'<div class="kpi"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>').join(''); }
 
   function setS(id,msg,err){ const el=document.getElementById(id); if(!el) return; el.textContent=msg; el.className='status'+(err?' err':''); }
-  function copyText(t,btn){ navigator.clipboard.writeText(t||'').then(()=>{ if(btn){ const o=btn.innerHTML; btn.innerHTML='✅'; btn.classList.add('copied'); setTimeout(()=>{btn.innerHTML=o;btn.classList.remove('copied');},1200); } }); }
+  function copyText(t,btn){ navigator.clipboard.writeText(t||'').then(()=>{ if(btn){ const o=btn.innerHTML; btn.innerHTML='✅'; btn.classList.add('copied'); setTimeout(()=>{btn.innerHTML=o;btn.classList.remove('copied');},1200);} }); }
   function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
   function fmt(n){ n=+n||0; return n>=1000?(n/1000).toFixed(1).replace('.0','')+'K':''+n; }
 </script>
