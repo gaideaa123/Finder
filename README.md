@@ -1,29 +1,27 @@
-# CaptionAI İçerik Üretici Bulucu 🔎
+# CaptionAI Finder · AI Panel 🧠
 
-TikTok'ta **6 dilde** (Türkçe, İngilizce, İspanyolca, Almanca, Fransızca, Arapça)
-içerik üreticisi bulur, ülkeye göre filtreler ve her birine **dilinde, kişiye
-özel, her seferinde farklı** bir DM hazırlar. Şık web arayüzü, tek tıkla DM
-(kopyala + profili aç).
+PC'nde local çalışan, AI destekli içerik üretici bulma + outreach paneli.
+TikTok'ta creator bulur, **gemini ile insansı DM** hazırlar, **gören AI** ile
+profil analizi yapar, yanıtları analiz edip **öğrenir**, email'i olanlara
+**otomatik mail** atar, hepsini bir **CRM**'de takip eder.
 
-## Öne çıkanlar
+## Mimari
 
-- 🌍 **6 dil / ülke butonu:** TR, EN, ES, DE, FR, AR. Tıkla seç, elle yazmana
-  gerek yok. Hiç seçmezsen tüm ülkeler taranır.
-- 🎯 **Dile göre niş hashtag çipleri:** Türkçe seçince Türkçe nişler, İngilizce
-  seçince İngilizce nişler çıkar. Tıkla, hashtag'ler otomatik eklenir.
-- 🔤 **Otomatik dil tespiti:** Creator'ın bio/ismine göre dili bulur (Türkçe,
-  İspanyolca, Almanca, Fransızca, Arapça karakter + kelime sinyalleri).
-- ✍️ **Her dilde 3 DM varyantı:** Her creator'a diline uygun varyantlardan
-  rastgele biri gider, sürekli aynı metin gitmez. Hepsi düzenlenebilir.
-- 💬 **Tek tıkla DM:** Metni kopyalar + profili yeni sekmede açar.
-- 🔍 **Sonuç araçları:** Listede canlı arama, takipçiye/isme göre sıralama,
-  tümünü kopyala, CSV indir.
+| Dosya | Görev |
+| --- | --- |
+| `finder.py` | Apify ile hashtag/ülke bazlı creator bulma |
+| `ai.py` | Gemini 2.5 Flash: insansı DM, gören profil analizi, yanıt analizi, öğrenme |
+| `crm.py` | SQLite: kuyruk, durum, yanıt oranı, tekrar bulmama |
+| `emailer.py` | Otomatik email (insan hızında, günlük limit) |
+| `app.py` | Hepsini birleştiren Flask sunucusu + panel |
 
-## Neden Apify?
+## Neden bu tasarım (dürüst)
 
-TikTok doğrudan kazımayı bilerek engelliyor (`msToken` saniyede değişiyor).
-Apify bu savaşı senin yerine veriyor: sabit API token'ı alıyorsun. Kurulumda
-Playwright/C++ derleyici derdi yok, sadece `requests` + `Flask`.
+- **TikTok DM'i otomatik gönderilmez.** TikTok bunu resmi API ile desteklemiyor;
+  otomatik gönderim hesabını banlatır. Bu yüzden DM = **tek tık asistan**
+  (metin kopyalanır + profil açılır, sen gönderirsin, insani hız, ban riski düşük).
+- **Email = tam otomatik.** Bu kanal yasal ve bansız; PC açıkken kendisi atar.
+- Anahtar bitince panel uyarır, yeni anahtarı girersin, kaldığı yerden devam.
 
 ## Kurulum
 
@@ -34,26 +32,22 @@ python app.py
 
 Tarayıcıda: **http://127.0.0.1:5000**
 
-## Apify token (tek seferlik, ücretsiz)
+## Anahtarlar (açılışta modal sorar)
 
-[apify.com](https://apify.com) → kayıt ol → [console.apify.com/account/integrations](https://console.apify.com/account/integrations) → API token'ı kopyala → arayüze yapıştır.
+- **Apify:** [console.apify.com/account/integrations](https://console.apify.com/account/integrations) → API token (creator bulma).
+- **Gemini (AI beyni):** [aistudio.google.com/apikey](https://aistudio.google.com/apikey) → ücretsiz API key.
+  Gemini 2.5 Flash ücretsiz katman: multimodal (gören), ~500 istek/gün.
 
 ## Kullanım
 
-1. Apify token'ını gir.
-2. **Ülke/dil** butonlarından seç (örn. sadece 🇹🇷 Türkçe, ya da 🇹🇷 + 🇺🇸).
-3. Niş çiplerine tıkla, hashtag'ler eklensin (seçtiğin dile göre değişir).
-4. Takipçi bandı + hedef sayı ayarla.
-5. İstersen 6 dilin DM varyantlarını düzenle (her dil sekmesi, `---` ile 3 varyant).
-6. **Üreticileri Bul** → sağda kartlar: dil rozeti + hazır DM.
-7. **💬 DM At** = kopyala + profil aç. Ya da **Tümünü Kopyala** / **CSV İndir**.
+1. **Ara:** ülke/dil + hashtag seç, bul. Sonuçlar AI ile DM'i hazırlanıp CRM kuyruğuna düşer (tekrar bulma yok).
+2. **DM Kuyruğu:** her kartta insansı DM hazır. **DM At** = kopyala + profil aç (sen gönder). 🧠 Yeniden = AI farklı DM üretir. 📝 Yanıt = gelen cevabı gir, AI sınıflandırır + cevap önerir. × = listeden çıkar.
+3. **Gören AI:** profil ekran görüntüsü yükle, AI niş/ton/uygunluk + yaklaşım önersin.
+4. **Email Otomasyon:** Gmail uygulama şifresiyle otomatik kampanya (günlük limit + insani gecikme).
+5. **Analiz:** yanıt oranı, dile göre performans, kimden cevap geldiği, AI duygu. Sistem bu veriden öğrenip DM'leri iyileştirir.
 
-## Dürüst notlar
+## Güvenlik notları
 
-- **Otomatik DM gönderme yok:** TikTok dışarıya soğuk DM göndermeye izin veren
-  resmi API sunmuyor (2026). 3. parti servisler hesabını banlatır. "Tek tık"
-  bu yüzden kopyala + profili aç ile sınırlı, göndermeyi sen yaparsın.
-- **Dil tespiti %100 değil:** Bio'su İngilizce olan bir Türk kaçabilir; Türkçe
-  hashtag'lerle birlikte kullanınca isabet çok yükselir.
-- Apify ücretsiz kredisi bitince küçük ücret alır; actor fiyatına bak.
-- Verileri sadece kişiye özel DM için kullan, toplu spam'e çevirme.
+- Gmail'de **normal şifre değil, uygulama şifresi** kullan (iptal edilebilir): [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords).
+- Anahtarlar ve veriler sadece kendi PC'nde (`finder_crm.db` local SQLite).
+- Topladığın verileri sadece kişiye özel outreach için kullan.
