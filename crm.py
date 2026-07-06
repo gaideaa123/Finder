@@ -1,4 +1,4 @@
-"""CaptionAI Finder - CRM (SQLite). Kuyruk, durum, email dedup, hesap takibi."""
+"""CaptionAI Finder - CRM (SQLite). Kuyruk, durum, email dedup, hesap takibi, DB yonetimi."""
 
 import sqlite3
 from datetime import datetime, timezone
@@ -27,7 +27,6 @@ def init_db() -> None:
                 created_at TEXT, sent_at TEXT, replied_at TEXT
             )"""
         )
-        # Eski db'ye sent_account kolonu ekle (varsa hata yut)
         try:
             c.execute("ALTER TABLE contacts ADD COLUMN sent_account TEXT")
         except Exception:
@@ -46,14 +45,12 @@ def known_usernames() -> set:
 
 
 def known_emails() -> set:
-    """Daha once eklenmis TUM email'ler (tekrar eklememek/atmamak icin)."""
     with _conn() as c:
         rows = c.execute("SELECT email FROM contacts WHERE email IS NOT NULL AND email<>''").fetchall()
     return {r["email"].strip().lower() for r in rows}
 
 
 def upsert_contacts(creators: List[dict]) -> int:
-    """Yeni creator'lari ekler. Ayni username YA DA ayni email varsa eklemez."""
     added = 0
     with _conn() as c:
         existing_emails = {
@@ -68,7 +65,7 @@ def upsert_contacts(creators: List[dict]) -> int:
                 continue
             em = (cr.get("email") or "").strip().lower()
             if em and em in existing_emails:
-                continue  # ayni email zaten var -> tekrar ekleme
+                continue
             c.execute(
                 """INSERT INTO contacts
                    (username, nickname, followers, lang, country, email, bio, bio_link,
@@ -99,8 +96,7 @@ def get_queue(channel: Optional[str] = None, limit: int = 300) -> List[dict]:
         return [dict(r) for r in c.execute(q, args).fetchall()]
 
 
-def email_queue(limit: int = 1000) -> List[dict]:
-    """Email'i olan, henuz gonderilmemis kisiler (email kampanyasi icin)."""
+def email_queue(limit: int = 5000) -> List[dict]:
     with _conn() as c:
         rows = c.execute(
             "SELECT * FROM contacts WHERE status='queued' AND email IS NOT NULL AND email<>'' ORDER BY followers DESC LIMIT ?",
@@ -147,7 +143,6 @@ def sent_today(channel: Optional[str] = None) -> int:
 
 
 def sent_today_account(account: str) -> int:
-    """Bir email hesabinin bugun gonderdigi adet (30 limit rotasyonu icin)."""
     today = datetime.now(timezone.utc).date().isoformat()
     with _conn() as c:
         return c.execute(
@@ -168,12 +163,64 @@ def stats() -> dict:
             "with_email": with_email, "reply_rate": reply_rate}
 
 
-def all_contacts(status: Optional[str] = None) -> List[dict]:
-    q = "SELECT * FROM contacts"
+# --- DB YONETIMI (panel Database sekmesi) --------------------------------
+
+def list_contacts(status: Optional[str] = None, channel: Optional[str] = None,
+                  search: str = "", limit: int = 500) -> List[dict]:
+    q = "SELECT * FROM contacts WHERE 1=1"
     args: list = []
     if status:
-        q += " WHERE status=?"
+        q += " AND status=?"
         args.append(status)
-    q += " ORDER BY followers DESC"
+    if channel:
+        q += " AND channel=?"
+        args.append(channel)
+    if search:
+        q += " AND (LOWER(username) LIKE ? OR LOWER(nickname) LIKE ? OR LOWER(email) LIKE ?)"
+        s = f"%{search.lower()}%"
+        args += [s, s, s]
+    q += " ORDER BY (sent_at IS NOT NULL) DESC, followers DESC LIMIT ?"
+    args.append(limit)
     with _conn() as c:
         return [dict(r) for r in c.execute(q, args).fetchall()]
+
+
+def sent_emails(limit: int = 500) -> List[dict]:
+    """Gonderilen email'ler (Database/Gonderilenler gorunumu icin)."""
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT username, nickname, email, sent_account, sent_at, message FROM contacts "
+            "WHERE channel='email' AND status IN ('sent','replied') ORDER BY sent_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def requeue(username: str) -> None:
+    """Bir kisiyi tekrar kuyruga al (tekrar bulunabilir/gonderilebilir yap)."""
+    with _conn() as c:
+        c.execute("UPDATE contacts SET status='queued', sent_at=NULL, sent_account=NULL, replied_at=NULL WHERE username=?", (username,))
+        c.commit()
+
+
+def delete_contact(username: str) -> None:
+    """Kisiyi tamamen sil (bir daha bulunabilir hale gelir)."""
+    with _conn() as c:
+        c.execute("DELETE FROM contacts WHERE username=?", (username,))
+        c.commit()
+
+
+def update_contact(username: str, fields: dict) -> None:
+    """Duzenlenebilir alanlari guncelle (email, message, lang, status...)."""
+    allowed = {"email", "message", "lang", "country", "nickname", "status", "channel"}
+    sets, args = [], []
+    for k, v in fields.items():
+        if k in allowed:
+            sets.append(f"{k}=?")
+            args.append(v)
+    if not sets:
+        return
+    args.append(username)
+    with _conn() as c:
+        c.execute(f"UPDATE contacts SET {', '.join(sets)} WHERE username=?", args)
+        c.commit()
