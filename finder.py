@@ -13,12 +13,65 @@ Ana fonksiyon: find_creators(cfg) -> list[dict]
 
 import json
 import os
-import time
 from typing import Dict, List, Optional
 
 import requests
 
 APIFY_BASE = "https://api.apify.com/v2"
+
+
+# --- Ülke -> dil eşlemesi ------------------------------------------------
+# Creator'ın ülkesine göre hangi dilde DM yazılacağını belirler.
+# GUI'de bu 'lang' kodu ilgili şablonu seçer. Listede olmayan ülke -> 'en'.
+COUNTRY_LANG = {
+    "TR": "tr",
+    "US": "en", "GB": "en", "CA": "en", "AU": "en", "IE": "en", "NZ": "en",
+    "DE": "de", "AT": "de", "CH": "de",
+    "FR": "fr", "BE": "fr",
+    "ES": "es", "MX": "es", "AR": "es", "CO": "es", "CL": "es", "PE": "es",
+    "SA": "ar", "AE": "ar", "EG": "ar", "IQ": "ar", "JO": "ar", "MA": "ar",
+    "IT": "it",
+    "PT": "pt", "BR": "pt",
+    "NL": "nl",
+    "RU": "ru",
+}
+
+# İnsan-okunur ülke adı -> ISO2 kodu (GUI'den "Türkiye" gibi girilebilsin).
+COUNTRY_NAME_TO_ISO = {
+    "turkiye": "TR", "türkiye": "TR", "turkey": "TR", "tr": "TR",
+    "amerika": "US", "abd": "US", "usa": "US", "united states": "US", "us": "US",
+    "ingiltere": "GB", "birlesik krallik": "GB", "uk": "GB", "united kingdom": "GB", "gb": "GB",
+    "almanya": "DE", "germany": "DE", "de": "DE",
+    "fransa": "FR", "france": "FR", "fr": "FR",
+    "ispanya": "ES", "spain": "ES", "es": "ES",
+    "italya": "IT", "italy": "IT", "it": "IT",
+    "hollanda": "NL", "netherlands": "NL", "nl": "NL",
+    "kanada": "CA", "canada": "CA", "ca": "CA",
+    "avustralya": "AU", "australia": "AU", "au": "AU",
+    "meksika": "MX", "mexico": "MX", "mx": "MX",
+    "arjantin": "AR", "argentina": "AR", "ar": "AR",
+    "brezilya": "BR", "brazil": "BR", "br": "BR",
+    "portekiz": "PT", "portugal": "PT", "pt": "PT",
+    "rusya": "RU", "russia": "RU", "ru": "RU",
+    "suudi arabistan": "SA", "saudi arabia": "SA", "sa": "SA",
+    "bae": "AE", "uae": "AE", "ae": "AE",
+    "misir": "EG", "mısır": "EG", "egypt": "EG", "eg": "EG",
+}
+
+
+def country_to_iso(value: str) -> Optional[str]:
+    if not value:
+        return None
+    v = str(value).strip().lower()
+    if len(v) == 2:
+        return v.upper()
+    return COUNTRY_NAME_TO_ISO.get(v)
+
+
+def lang_for_country(iso: Optional[str]) -> str:
+    if not iso:
+        return "en"
+    return COUNTRY_LANG.get(iso.upper(), "en")
 
 
 def load_config(path: Optional[str] = None) -> dict:
@@ -29,14 +82,9 @@ def load_config(path: Optional[str] = None) -> dict:
 
 
 # --- Esnek alan çözümleyiciler ------------------------------------------
-# Farklı Apify actor'ları farklı alan isimleri döndürür. Hepsini tek bir
-# normalize edilmiş kayıta indirger.
 
 def _first(d: dict, keys: List[str], default=None):
     for k in keys:
-        if k in d and d[k] not in (None, ""):
-            return d[k]
-        # nested: authorMeta.name gibi
         if "." in k:
             cur = d
             ok = True
@@ -48,11 +96,13 @@ def _first(d: dict, keys: List[str], default=None):
                     break
             if ok and cur not in (None, ""):
                 return cur
+        elif k in d and d[k] not in (None, ""):
+            return d[k]
     return default
 
 
 def normalize_item(item: dict) -> Optional[dict]:
-    """Bir Apify sonucunu {username, nickname, followers, bio, profile} yap."""
+    """Bir Apify sonucunu normalize edilmiş kayıta indirger."""
     username = _first(
         item,
         ["username", "handle", "uniqueId", "authorMeta.name", "author.uniqueId", "userName"],
@@ -79,12 +129,23 @@ def normalize_item(item: dict) -> Optional[dict]:
     bio = _first(item, ["bio", "signature", "authorMeta.signature", "description"], default="")
     email = _first(item, ["email", "authorMeta.email"], default="")
 
+    # Ülke / bölge: farklı actor'lar farklı alanlarda döndürür.
+    country_raw = _first(
+        item,
+        ["country", "region", "countryCode", "authorMeta.region", "author.region", "location"],
+        default="",
+    )
+    iso = country_to_iso(country_raw)
+    lang = lang_for_country(iso)
+
     return {
         "username": username,
         "nickname": nickname or username,
         "followers": followers,
         "bio": bio or "",
         "email": email or "",
+        "country": iso or "",
+        "lang": lang,
         "profile": f"https://www.tiktok.com/@{username}",
     }
 
@@ -92,7 +153,7 @@ def normalize_item(item: dict) -> Optional[dict]:
 def find_creators(cfg: dict) -> List[dict]:
     """
     Apify actor'ını çalıştırıp normalize edilmiş creator listesi döner.
-    Takipçi bandına göre filtreler, hedef sayıda keser, tekrarları atar.
+    Takipçi bandı + (varsa) ülke listesine göre filtreler.
     """
     token = cfg.get("apify_token", "")
     if not token or "YAPISTIR" in token:
@@ -109,28 +170,28 @@ def find_creators(cfg: dict) -> List[dict]:
     max_f = int(cfg.get("max_followers", 50000))
     target = int(cfg.get("target_count", 100))
 
-    # Actor input'u. paxiq/tiktok-influencer-scraper bu alanları kullanır;
-    # başka actor seçilirse config.apify_input ile override edilebilir.
+    # İstenen ülkeler (ISO2 kümesi). Boşsa ülke filtresi uygulanmaz.
+    wanted_countries = set()
+    for c in cfg.get("countries", []) or []:
+        iso = country_to_iso(c)
+        if iso:
+            wanted_countries.add(iso)
+
     actor_input = cfg.get("apify_input") or {
         "hashtags": hashtags,
         "minFollowers": min_f,
         "maxFollowers": max_f,
-        "maxItems": target * 2,  # filtreden sonra hedefe ulaşmak için fazladan çek
+        "maxItems": target * 3,  # ülke filtresinden sonra hedefe ulaşmak için bolca çek
     }
+    # Actor ülke filtresini destekliyorsa ipucu ver (desteklemezse yok sayar).
+    if wanted_countries:
+        actor_input.setdefault("countries", sorted(wanted_countries))
 
-    # Actor'ı senkron çalıştır ve dataset item'larını al (tek çağrı).
     url = f"{APIFY_BASE}/acts/{actor}/run-sync-get-dataset-items"
-    resp = requests.post(
-        url,
-        params={"token": token},
-        json=actor_input,
-        timeout=600,
-    )
+    resp = requests.post(url, params={"token": token}, json=actor_input, timeout=600)
 
     if resp.status_code >= 400:
-        raise RuntimeError(
-            f"Apify hatasi ({resp.status_code}): {resp.text[:300]}"
-        )
+        raise RuntimeError(f"Apify hatasi ({resp.status_code}): {resp.text[:300]}")
 
     items = resp.json()
     if not isinstance(items, list):
@@ -143,15 +204,18 @@ def find_creators(cfg: dict) -> List[dict]:
             continue
         if rec["username"] in seen:
             continue
-        # Takipçi bandı filtresi (actor zaten filtrelese de garantiye al)
         f = rec["followers"]
         if f and (f < min_f or f > max_f):
+            continue
+        # Ülke filtresi: istenen ülke listesi varsa ve creator'ın ülkesi
+        # biliniyorsa, listede değilse ele. (Ülke bilinmiyorsa dahil edilir
+        # ki actor ülke döndürmediğinde her şey elenmesin.)
+        if wanted_countries and rec["country"] and rec["country"] not in wanted_countries:
             continue
         seen[rec["username"]] = rec
         if len(seen) >= target:
             break
 
-    # Takipçiye göre büyükten küçüğe sırala
     return sorted(seen.values(), key=lambda r: r["followers"], reverse=True)
 
 
@@ -159,7 +223,8 @@ def save_csv(rows: List[dict], out_csv: str) -> None:
     import csv
     with open(out_csv, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(
-            f, fieldnames=["username", "nickname", "followers", "email", "bio", "profile"]
+            f,
+            fieldnames=["username", "nickname", "followers", "country", "lang", "email", "bio", "profile"],
         )
         writer.writeheader()
         writer.writerows(rows)
@@ -173,7 +238,7 @@ def _cli() -> None:
     save_csv(rows, out_csv)
     print(f"\n=== BITTI ===\n{len(rows)} uretici bulundu -> {out_csv}")
     for r in rows[:10]:
-        print(f"  @{r['username']}  {r['followers']} takipci")
+        print(f"  @{r['username']}  {r['followers']} takipci  [{r['country'] or '?'} / {r['lang']}]")
 
 
 if __name__ == "__main__":
