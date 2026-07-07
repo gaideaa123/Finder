@@ -65,6 +65,7 @@ def setup_load():
         "has_file": os.path.exists(SECRETS_FILE),
         "apify_masked": [_mask(x) for x in (d.get("apify_tokens") or [])],
         "groq_masked": [_mask(x) for x in (d.get("groq_keys") or [])],
+        "scrapecreators_masked": [_mask(x) for x in (d.get("scrapecreators_keys") or [])],
         "accounts": [{"email": a.get("email", ""), "from_name": a.get("from_name", "")}
                      for a in (d.get("email_accounts") or [])],
         "sender": d.get("sender") or "gmail",
@@ -81,6 +82,7 @@ def setup_save():
 
     apify = _lines(data.get("apify_tokens", ""))
     groq = _lines(data.get("groq_keys", ""))
+    scrape = _lines(data.get("scrapecreators_keys", ""))
 
     accs = []
     for a in data.get("email_accounts") or []:
@@ -104,6 +106,7 @@ def setup_save():
     out = {
         "apify_tokens": apify or existing.get("apify_tokens") or [],
         "groq_keys": groq or existing.get("groq_keys") or [],
+        "scrapecreators_keys": scrape or existing.get("scrapecreators_keys") or [],
         "email_accounts": accs or existing.get("email_accounts") or [],
         "ses": ses,
         "sender": data.get("sender") or existing.get("sender") or "gmail",
@@ -118,6 +121,7 @@ def setup_save():
     with open(SECRETS_FILE, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
     return jsonify({"ok": True, "apify": len(out["apify_tokens"]), "groq": len(out["groq_keys"]),
+                    "scrapecreators": len(out["scrapecreators_keys"]),
                     "accounts": len(out["email_accounts"]), "sender": out["sender"],
                     "ses": bool(out["ses"]["from_email"])})
 
