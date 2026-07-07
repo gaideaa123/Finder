@@ -3,6 +3,8 @@
 Email-only autopilot: TikTok'ta creator bulur -> email'ini bulur -> Groq ile
 hiper-ozel EMAIL uretir -> otomatik gonderir. DM GONDERMEZ. Ayni kisiyi tekrar
 getirmez (CRM dedup + arama sirasinda eleme). Server'da 7/24 calisabilir (env + AUTOSTART).
+
+Anahtar checker (Apify + Groq bakiye/kullanim) ayri sayfada: /checker
 """
 
 import json
@@ -23,6 +25,13 @@ except Exception:
 
 app = Flask(__name__)
 crm.init_db()
+
+# Bakiye/kullanim checker (Apify + Groq) - ayri sayfa: /checker
+try:
+    from checker import checker_bp
+    app.register_blueprint(checker_bp)
+except Exception:
+    pass
 
 SITE_URL = os.environ.get("SITE_URL", "thecaptionai.com")
 
@@ -363,22 +372,46 @@ def api_email_stop():
 def _split(v):
     return [t.strip() for t in (v or "").replace("\n", ",").split(",") if t.strip()]
 
+def _norm_list(v):
+    if isinstance(v, list):
+        return [str(x).strip() for x in v if str(x).strip()]
+    return _split(v or "")
+
+def _accounts_from(items):
+    out = []
+    for a in items or []:
+        e, p = (a.get("email") or "").strip(), (a.get("password") or "").strip()
+        if e and p:
+            out.append({"email": e, "password": p, "from_name": (a.get("from_name") or "").strip()})
+    return out
+
 def bootstrap_from_env():
-    """Anahtarlari, email hesaplarini env'den yukler (server'da modal yok)."""
+    """Anahtarlari + email hesaplarini once env'den, sonra secrets.local.json'dan yukler.
+    Gizli dosya .gitignore'dadir; repoya asla gitmez."""
     STATE["apify_tokens"] = _split(os.environ.get("APIFY_TOKENS", ""))
     STATE["groq_keys"] = _split(os.environ.get("GROQ_KEYS", ""))
     raw = os.environ.get("EMAIL_ACCOUNTS", "").strip()
     if raw:
         try:
-            accs = json.loads(raw)
-            STATE["accounts"] = [
-                {"email": (a.get("email") or "").strip(),
-                 "password": (a.get("password") or "").strip(),
-                 "from_name": (a.get("from_name") or "").strip()}
-                for a in accs if a.get("email") and a.get("password")
-            ]
+            STATE["accounts"] = _accounts_from(json.loads(raw))
         except Exception:
             pass
+    # env bos ise gizli local dosyadan doldur
+    for p in ("secrets.local.json", os.path.join(os.environ.get("DATA_DIR", "."), "secrets.local.json")):
+        if not os.path.exists(p):
+            continue
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                d = json.load(f)
+        except Exception:
+            break
+        if not STATE["apify_tokens"]:
+            STATE["apify_tokens"] = _norm_list(d.get("apify_tokens"))
+        if not STATE["groq_keys"]:
+            STATE["groq_keys"] = _norm_list(d.get("groq_keys"))
+        if not STATE["accounts"] and d.get("email_accounts"):
+            STATE["accounts"] = _accounts_from(d.get("email_accounts"))
+        break
 
 def _env_autostart_config():
     return {
@@ -402,5 +435,5 @@ if __name__ == "__main__":
     host = os.environ.get("HOST", "127.0.0.1")
     # debug/reloader varsayilan KAPALI (RCE riski + reloader auto dongusunu iki kez baslatir).
     debug = os.environ.get("FLASK_DEBUG") == "1"
-    print(f"\n CaptionAI Finder -> http://{host}:{port}\n")
+    print(f"\n CaptionAI Finder -> http://{host}:{port}  (checker: /checker)\n")
     app.run(debug=debug, host=host, port=port)

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CaptionAI · Anahtar Checker</title>
+<style>
+  :root { --bg:#0b0b12; --panel:#14141f; --panel-2:#1b1b2a; --border:#2a2a3c;
+    --text:#e9e9f2; --muted:#a0a0b8; --accent:#a855f7; --accent-2:#ec4899; --green:#22c55e; --red:#ef4444; --amber:#f59e0b; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--text); }
+  .wrap { max-width:900px; margin:0 auto; padding:28px 20px 80px; }
+  h1 { font-size:22px; display:flex; align-items:center; gap:10px; }
+  h1 .dot { width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center; }
+  a.back { color:var(--muted); font-size:13px; text-decoration:none; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:20px; margin:16px 0; }
+  .card h2 { margin:0 0 12px; font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+  textarea { width:100%; min-height:70px; background:var(--panel-2); border:1px solid var(--border); color:var(--text); border-radius:10px; padding:10px 12px; font-size:13px; font-family:ui-monospace,monospace; }
+  .btn { border:none; cursor:pointer; border-radius:11px; font-weight:700; font-size:14px; padding:11px 16px; color:white; background:linear-gradient(135deg,var(--accent),var(--accent-2)); }
+  .btn.secondary { background:var(--panel-2); border:1px solid var(--border); }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:10px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; margin-top:10px; }
+  th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); }
+  th { color:var(--muted); font-weight:600; }
+  .pill { font-size:11px; padding:3px 8px; border-radius:999px; border:1px solid var(--border); }
+  .ok { color:var(--green); border-color:rgba(34,197,94,.4); }
+  .bad { color:var(--red); border-color:rgba(239,68,68,.4); }
+  .warn { color:var(--amber); border-color:rgba(245,158,11,.4); }
+  .muted { color:var(--muted); font-size:12px; line-height:1.6; margin-top:8px; }
+  .bar { height:7px; background:var(--panel-2); border-radius:999px; overflow:hidden; margin-top:4px; }
+  .bar > span { display:block; height:100%; background:linear-gradient(90deg,var(--accent),var(--accent-2)); }
+  .status { color:var(--muted); font-size:13px; min-height:18px; margin-top:8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+    <h1><span class="dot">🔋</span> Anahtar Checker</h1>
+    <a class="back" href="/">← Panele don</a>
+  </div>
+  <p class="muted">Server'da yuklu anahtarlar (env / <code>secrets.local.json</code>) sayfa acilinca otomatik taranir. Ayrica asagiya elle yapistirip da tarayabilirsin. Anahtarlar maskeli gosterilir.</p>
+
+  <div class="card">
+    <h2>Apify · bakiye & kullanim</h2>
+    <textarea id="apifyIn" placeholder="apify_api_xxx (her satira bir token ya da virgulle)"></textarea>
+    <div class="row"><button class="btn" onclick="checkApify()">Tara</button></div>
+    <div id="apifyStatus" class="status"></div>
+    <div id="apifyOut"></div>
+  </div>
+
+  <div class="card">
+    <h2>Groq · limit & kalan</h2>
+    <textarea id="groqIn" placeholder="gsk_xxx (her satira bir key ya da virgulle)"></textarea>
+    <div class="row"><button class="btn" onclick="checkGroq()">Tara</button></div>
+    <div id="groqStatus" class="status"></div>
+    <div id="groqOut"></div>
+    <p class="muted">Not: Groq dolar bakiyesini API ile vermiyor (limitler gun/dakika bazli). Bu yuzden gunluk istek (RPD) ve dakikalik token (TPM) icin <b>kalan/limit</b> gosterilir. Free tier tipik: 14.400 istek/gun.</p>
+  </div>
+</div>
+
+<script>
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+  function pill(ok,txt){ return '<span class="pill '+(ok?'ok':'bad')+'">'+esc(txt)+'</span>'; }
+
+  function apifyTable(rows){
+    if(!rows||!rows.length) return '<p class="muted">Sonuc yok.</p>';
+    let h='<table><tr><th>Token</th><th>Plan</th><th>Kullanildi</th><th>Kredi</th><th>Kalan</th><th>Cycle</th><th></th></tr>';
+    for(const r of rows){
+      if(!r.ok){ h+='<tr><td>'+esc(r.token)+'</td><td colspan=5>'+pill(false,r.error||'hata')+'</td><td></td></tr>'; continue; }
+      const left = r.credit_left_usd==null?'-':('$'+r.credit_left_usd);
+      const pct = (r.credits_usd? Math.min(100, Math.round((r.used_usd/r.credits_usd)*100)) : 0);
+      h+='<tr><td>'+esc(r.token)+'</td><td>'+esc(r.plan)+'</td><td>$'+esc(r.used_usd)+'</td><td>$'+esc(r.credits_usd)+'</td><td>'+esc(left)+'<div class="bar"><span style="width:'+pct+'%"></span></div></td><td>'+esc(r.cycle_start)+'..'+esc(r.cycle_end)+'</td><td>'+pill(true,'ok')+'</td></tr>';
+    }
+    return h+'</table>';
+  }
+  function groqTable(rows){
+    if(!rows||!rows.length) return '<p class="muted">Sonuc yok.</p>';
+    let h='<table><tr><th>Key</th><th>Istek (gun)</th><th>Token (dk)</th><th>Durum</th></tr>';
+    for(const r of rows){
+      if(!r.ok){ h+='<tr><td>'+esc(r.key)+'</td><td colspan=2></td><td>'+pill(false,r.error||'hata')+'</td></tr>'; continue; }
+      const st = r.status===429? '<span class="pill warn">429 dolu</span>' : pill(true,'ok');
+      h+='<tr><td>'+esc(r.key)+'</td><td>'+esc(r.req_remaining_day||'?')+' / '+esc(r.req_limit_day||'?')+'</td><td>'+esc(r.tok_remaining_min||'?')+' / '+esc(r.tok_limit_min||'?')+'</td><td>'+st+'</td></tr>';
+    }
+    return h+'</table>';
+  }
+
+  async function checkApify(){
+    const t=document.getElementById('apifyIn').value.trim();
+    if(!t){ document.getElementById('apifyStatus').textContent='Token yapistir.'; return; }
+    document.getElementById('apifyStatus').textContent='Taraniyor...';
+    const r=await fetch('/api/check/apify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tokens:t})});
+    const d=await r.json(); document.getElementById('apifyStatus').textContent='';
+    document.getElementById('apifyOut').innerHTML=apifyTable(d.results);
+  }
+  async function checkGroq(){
+    const t=document.getElementById('groqIn').value.trim();
+    if(!t){ document.getElementById('groqStatus').textContent='Key yapistir.'; return; }
+    document.getElementById('groqStatus').textContent='Taraniyor...';
+    const r=await fetch('/api/check/groq',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keys:t})});
+    const d=await r.json(); document.getElementById('groqStatus').textContent='';
+    document.getElementById('groqOut').innerHTML=groqTable(d.results);
+  }
+  async function auto(){
+    document.getElementById('apifyStatus').textContent='Server anahtarlari taraniyor...';
+    document.getElementById('groqStatus').textContent='Server anahtarlari taraniyor...';
+    try{
+      const r=await fetch('/api/check/auto'); const d=await r.json();
+      document.getElementById('apifyStatus').textContent = (d.apify&&d.apify.length)?'':'Server\'da Apify anahtari yok (elle yapistir).';
+      document.getElementById('groqStatus').textContent = (d.groq&&d.groq.length)?'':'Server\'da Groq anahtari yok (elle yapistir).';
+      if(d.apify&&d.apify.length) document.getElementById('apifyOut').innerHTML=apifyTable(d.apify);
+      if(d.groq&&d.groq.length) document.getElementById('groqOut').innerHTML=groqTable(d.groq);
+    }catch(e){ document.getElementById('apifyStatus').textContent=''; document.getElementById('groqStatus').textContent=''; }
+  }
+  auto();
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
-# Fly.io deploy config - CaptionAI Finder (7/24 email autopilot)
-# Kurulum: `fly launch --no-deploy` (bu dosyayi korur) -> secrets -> `fly deploy`
-# app adini kendine gore degistir.
+# Fly.io deploy config - CaptionAI Finder (7/24 email autopilot + /checker)
+# TEK KOMUT kurulum:  ./deploy.sh
+# app adini kendine gore degistir (ya da: ./deploy.sh benim-app-adim).
 
 app = "captionai-finder"
 primary_region = "fra"  # sana yakin bolge: fra (Frankfurt), ams, cdg...

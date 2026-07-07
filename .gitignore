@@ -1,5 +1,6 @@
-# Secrets & local data
+# Secrets & local data (ASLA commit etme)
 config.json
+secrets.local.json
 .env
 finder_crm.db
 seen_history.json
