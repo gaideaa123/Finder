@@ -120,6 +120,29 @@ def setup_save():
     return jsonify({"ok": True, "apify": len(out["apify_tokens"]),
                     "groq": len(out["groq_keys"]), "accounts": len(out["email_accounts"])})
 
+def _saved_groq_keys() -> list:
+    return _read().get("groq_keys") or []
+
+@setup_bp.route("/api/setup/hashtags", methods=["POST"])
+def setup_hashtags():
+    """Kaydedilmis Groq key'leriyle (dosyadan) hashtag uretir. Restart gerekmez."""
+    keys = _saved_groq_keys()
+    if not keys:
+        return jsonify({"ok": False, "error": "Once Groq key kaydet."}), 400
+    try:
+        from ai import AIBrain
+        brain = AIBrain(keys)
+        data = request.get_json(force=True) or {}
+        tags = brain.generate_hashtags(
+            lang=data.get("lang", "tr"),
+            countries=data.get("countries") or [],
+            niche_hint=data.get("niche", ""),
+            count=int(data.get("count", 12)),
+        )
+        return jsonify({"ok": True, "hashtags": tags})
+    except Exception as e:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(e)[:150]}), 500
+
 @setup_bp.route("/api/setup/check")
 def setup_check():
     try:
@@ -144,19 +167,16 @@ def setup_deploy():
 
     def gen():
         yield sse("Deploy hazirlaniyor...")
-        # 1) deploy.sh var mi?
         if not os.path.exists(DEPLOY_SH):
             yield sse(f"HATA: deploy.sh bulunamadi ({DEPLOY_SH}).")
             yield sse("Once PR'i merge et ve repoyu guncelle (git pull), sonra tekrar dene.")
             yield sse("[DONE]"); return
-        # 2) bash var mi?
         bash = _find_bash()
         if not bash:
             yield sse("HATA: 'bash' bulunamadi (\"sistem belirtilen dosyayi bulamiyor\").")
             yield sse("Windows'taysan: Git for Windows kur (git-scm.com) ya da WSL ac, deploy'u Git-Bash'ten calistir.")
             yield sse("Alternatif: terminalde  bash deploy.sh  komutunu elle calistir.")
             yield sse("[DONE]"); return
-        # 3) calistir
         try:
             proc = subprocess.Popen(
                 [bash, DEPLOY_SH, safe],
