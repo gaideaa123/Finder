@@ -1,0 +1,23 @@
+# Secrets & local data
+config.json
+.env
+finder_crm.db
+seen_history.json
+creators.csv
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Fly
+fly.toml.bak
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

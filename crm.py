@@ -1,19 +1,27 @@
 """CaptionAI Finder - CRM (SQLite). Kuyruk, durum, email dedup, hesap takibi, DB yonetimi."""
 
+import os
 import sqlite3
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
-DB_FILE = "finder_crm.db"
-
+# Server'da kalici volume icin DATA_DIR (orn. /data). Local'de bulundugu klasor.
+DB_FILE = os.path.join(os.environ.get("DATA_DIR", "."), "finder_crm.db")
 
 def _conn():
-    c = sqlite3.connect(DB_FILE)
+    # timeout: auto dongusu (arka plan thread) ve API istekleri ayni anda yazabilir;
+    # kilit varsa 30sn bekle, aksi halde 'database is locked' hatasi firlar.
+    c = sqlite3.connect(DB_FILE, timeout=30)
     c.row_factory = sqlite3.Row
     return c
 
-
 def init_db() -> None:
+    d = os.path.dirname(DB_FILE)
+    if d and not os.path.exists(d):
+        try:
+            os.makedirs(d, exist_ok=True)
+        except Exception:
+            pass
     with _conn() as c:
         c.execute(
             """CREATE TABLE IF NOT EXISTS contacts (
@@ -33,22 +41,18 @@ def init_db() -> None:
             pass
         c.commit()
 
-
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
-
 
 def known_usernames() -> set:
     with _conn() as c:
         rows = c.execute("SELECT username FROM contacts").fetchall()
     return {r["username"].lower() for r in rows}
 
-
 def known_emails() -> set:
     with _conn() as c:
         rows = c.execute("SELECT email FROM contacts WHERE email IS NOT NULL AND email<>''").fetchall()
     return {r["email"].strip().lower() for r in rows}
-
 
 def upsert_contacts(creators: List[dict]) -> int:
     added = 0
@@ -83,7 +87,6 @@ def upsert_contacts(creators: List[dict]) -> int:
         c.commit()
     return added
 
-
 def get_queue(channel: Optional[str] = None, limit: int = 300) -> List[dict]:
     q = "SELECT * FROM contacts WHERE status='queued'"
     args: list = []
@@ -95,7 +98,6 @@ def get_queue(channel: Optional[str] = None, limit: int = 300) -> List[dict]:
     with _conn() as c:
         return [dict(r) for r in c.execute(q, args).fetchall()]
 
-
 def email_queue(limit: int = 5000) -> List[dict]:
     with _conn() as c:
         rows = c.execute(
@@ -104,12 +106,10 @@ def email_queue(limit: int = 5000) -> List[dict]:
         ).fetchall()
     return [dict(r) for r in rows]
 
-
 def set_message(username: str, message: str) -> None:
     with _conn() as c:
         c.execute("UPDATE contacts SET message=? WHERE username=?", (message, username))
         c.commit()
-
 
 def mark_sent(username: str, channel: str = "dm", account: str = "") -> None:
     with _conn() as c:
@@ -117,19 +117,16 @@ def mark_sent(username: str, channel: str = "dm", account: str = "") -> None:
                   (channel, account, _now(), username))
         c.commit()
 
-
 def mark_replied(username: str, reply_text: str, sentiment: str = "", category: str = "") -> None:
     with _conn() as c:
         c.execute("UPDATE contacts SET status='replied', reply_text=?, sentiment=?, category=?, replied_at=? WHERE username=?",
                   (reply_text, sentiment, category, _now(), username))
         c.commit()
 
-
 def mark_skipped(username: str) -> None:
     with _conn() as c:
         c.execute("UPDATE contacts SET status='skipped' WHERE username=?", (username,))
         c.commit()
-
 
 def sent_today(channel: Optional[str] = None) -> int:
     today = datetime.now(timezone.utc).date().isoformat()
@@ -141,7 +138,6 @@ def sent_today(channel: Optional[str] = None) -> int:
     with _conn() as c:
         return c.execute(q, args).fetchone()["n"]
 
-
 def sent_today_account(account: str) -> int:
     today = datetime.now(timezone.utc).date().isoformat()
     with _conn() as c:
@@ -149,7 +145,6 @@ def sent_today_account(account: str) -> int:
             "SELECT COUNT(*) n FROM contacts WHERE channel='email' AND sent_account=? AND sent_at LIKE ?",
             (account, today + "%"),
         ).fetchone()["n"]
-
 
 def stats() -> dict:
     with _conn() as c:
@@ -161,7 +156,6 @@ def stats() -> dict:
     reply_rate = round((replied / sent) * 100, 1) if sent else 0.0
     return {"total": total, "sent": sent, "replied": replied, "queued": queued,
             "with_email": with_email, "reply_rate": reply_rate}
-
 
 # --- DB YONETIMI (panel Database sekmesi) --------------------------------
 
@@ -184,7 +178,6 @@ def list_contacts(status: Optional[str] = None, channel: Optional[str] = None,
     with _conn() as c:
         return [dict(r) for r in c.execute(q, args).fetchall()]
 
-
 def sent_emails(limit: int = 500) -> List[dict]:
     """Gonderilen email'ler (Database/Gonderilenler gorunumu icin)."""
     with _conn() as c:
@@ -195,20 +188,17 @@ def sent_emails(limit: int = 500) -> List[dict]:
         ).fetchall()
     return [dict(r) for r in rows]
 
-
 def requeue(username: str) -> None:
     """Bir kisiyi tekrar kuyruga al (tekrar bulunabilir/gonderilebilir yap)."""
     with _conn() as c:
         c.execute("UPDATE contacts SET status='queued', sent_at=NULL, sent_account=NULL, replied_at=NULL WHERE username=?", (username,))
         c.commit()
 
-
 def delete_contact(username: str) -> None:
     """Kisiyi tamamen sil (bir daha bulunabilir hale gelir)."""
     with _conn() as c:
         c.execute("DELETE FROM contacts WHERE username=?", (username,))
         c.commit()
-
 
 def update_contact(username: str, fields: dict) -> None:
     """Duzenlenebilir alanlari guncelle (email, message, lang, status...)."""
