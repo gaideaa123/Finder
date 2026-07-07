@@ -160,12 +160,15 @@ def stats() -> dict:
             "with_email": with_email, "reply_rate": reply_rate}
 
 def list_contacts(status: Optional[str] = None, channel: Optional[str] = None,
-                  search: str = "", limit: int = 500) -> List[dict]:
+                  search: str = "", limit: int = 500, exclude_sent: bool = False) -> List[dict]:
     q = "SELECT * FROM contacts WHERE 1=1"
     args: list = []
     if status:
         q += " AND status=?"
         args.append(status)
+    elif exclude_sent:
+        # Gonderilmis/yanitlanmis olanlari gizle (ama DB'de kalir -> tekrar atilmaz)
+        q += " AND status NOT IN ('sent','replied')"
     if channel:
         q += " AND channel=?"
         args.append(channel)
@@ -198,7 +201,6 @@ def delete_contact(username: str) -> None:
         c.commit()
 
 def delete_many(usernames: List[str]) -> int:
-    """Toplu silme. usernames bosersa hicbir sey yapmaz."""
     usernames = [u for u in (usernames or []) if u]
     if not usernames:
         return 0
@@ -208,7 +210,6 @@ def delete_many(usernames: List[str]) -> int:
     return len(usernames)
 
 def delete_by_status(status: str) -> int:
-    """Belirli durumdaki (ya da 'all') tum kayitlari siler."""
     with _conn() as c:
         if status and status != "all":
             cur = c.execute("DELETE FROM contacts WHERE status=?", (status,))

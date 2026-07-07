@@ -1,11 +1,9 @@
 """CaptionAI Finder - Groq AI + Apify + coklu hesap Email + CRM + Auto dongu.
 
 Email-only autopilot: TikTok'ta creator bulur -> email'ini bulur -> Groq ile
-kisiye ozel, HATASIZ ve TEK DILDE (kisinin diline gore) EMAIL uretir -> otomatik
-gonderir. Konu satiri da kisiye ozel. Ayni kisiyi tekrar getirmez.
-
-Sayfalar:  /  panel (her sey burada: anahtar, arama, kuyruk, email, database, analiz)
-           /checker bakiye  ·  /setup kurulum GUI (opsiyonel)
+KISININ GERCEK DILINDE (Turk'e tr, Ingiliz'e en...), kisiye ozel, HATASIZ email
+uretir -> otomatik gonderir. Konu satiri da kisiye ozel. Ayni kisiyi tekrar
+getirmez; gonderilenler DB'de kalir ama panelde gizlenir ve tekrar atilmaz.
 """
 
 import json
@@ -51,6 +49,10 @@ _monitor_started = False
 FALLBACK = {
     "tr": "Selam {name}, videolarini bir suredir takip ediyorum ve tarzini gercekten begeniyorum. 16 yasindayim ve tek basima CaptionAI adinda kucuk bir arac gelistirdim: video konusunu yaziyorsun, saniyeler icinde hazir caption oneriyor. Denersen fikrini cok merak ederim: {url}",
     "en": "Hey {name}, I've been following your videos for a while and I really like your style. I'm 16 and I built a little tool called CaptionAI on my own: you type your video topic and it gives ready captions in seconds. Would love your honest take if you try it: {url}",
+    "es": "Hola {name}, sigo tus videos desde hace un tiempo y me encanta tu estilo. Tengo 16 anos e hice una pequena herramienta llamada CaptionAI: escribes el tema de tu video y te da captions listos en segundos. Me encantaria tu opinion si la pruebas: {url}",
+    "de": "Hey {name}, ich verfolge deine Videos schon eine Weile und mag deinen Stil sehr. Ich bin 16 und habe allein ein kleines Tool namens CaptionAI gebaut: du gibst dein Videothema ein und bekommst in Sekunden fertige Captions. Uber dein ehrliches Feedback wurde ich mich freuen: {url}",
+    "fr": "Hey {name}, je suis tes videos depuis un moment et j'aime beaucoup ton style. J'ai 16 ans et j'ai cree seul un petit outil appele CaptionAI : tu tapes le sujet de ta video et il te donne des legendes pretes en quelques secondes. Ton avis honnete m'interesserait si tu l'essaies : {url}",
+    "ar": "\u0645\u0631\u062d\u0628\u0627 {name}\u060c \u0623\u062a\u0627\u0628\u0639 \u0641\u064a\u062f\u064a\u0648\u0647\u0627\u062a\u0643 \u0645\u0646\u0630 \u0641\u062a\u0631\u0629 \u0648\u0623\u062d\u0628 \u0623\u0633\u0644\u0648\u0628\u0643. \u0639\u0645\u0631\u064a 16 \u0648\u0635\u0646\u0639\u062a \u0623\u062f\u0627\u0629 \u0635\u063a\u064a\u0631\u0629 \u0627\u0633\u0645\u0647\u0627 CaptionAI: \u062a\u0643\u062a\u0628 \u0645\u0648\u0636\u0648\u0639 \u0627\u0644\u0641\u064a\u062f\u064a\u0648 \u0648\u062a\u062d\u0635\u0644 \u0639\u0644\u0649 \u0643\u0627\u0628\u0634\u0646\u0627\u062a \u062c\u0627\u0647\u0632\u0629 \u0628\u062b\u0648\u0627\u0646\u064a. \u064a\u0647\u0645\u0646\u064a \u0631\u0623\u064a\u0643: {url}",
 }
 
 def _fallback(creator):
@@ -124,12 +126,8 @@ def _run_search(data):
     return None, last or "Tum Apify token'lar tukendi", True
 
 def _finalize(rows, countries):
-    isos = {country_to_iso(c) for c in countries if country_to_iso(c)}
-    forced = lang_for_country(list(isos)[0]) if len(isos) == 1 else ""
-    if forced:
-        for r in rows:
-            if not r.get("detected_lang"):
-                r["lang"] = forced
+    # DIL: her creator KENDI tespit edilen diline gore (finder.py belirledi).
+    # Ulkeye gore ZORLA dil atama YOK -> Ingiliz creator'a Turkce email gitmez.
     known_u, known_e = crm.known_usernames(), crm.known_emails()
     brain = _brain()
     learned = ""
@@ -147,6 +145,8 @@ def _finalize(rows, countries):
             continue
         if em:
             seen_e.add(em)
+        if r.get("lang") not in SUPPORTED_LANGS:
+            r["lang"] = "en"
         r["message"] = _dm_for(r, brain=brain, learned=learned)
         fresh.append(r)
     crm.upsert_contacts(fresh)
@@ -314,8 +314,6 @@ def api_auto_stop():
     stop_campaign()
     return jsonify({"ok": True})
 
-# ---- GUI kontrol (Baslat/Durdur) ----------------------------------------
-
 def _ctrl_ok():
     ra = (request.remote_addr or "").strip()
     if ra in ("127.0.0.1", "::1", "localhost", ""):
@@ -390,8 +388,6 @@ def api_control_stop():
     STATE["auto"]["stop"] = True
     stop_campaign()
     return jsonify({"ok": True})
-
-# ---- Surekli monitor -----------------------------------------------------
 
 def _monitor_tick():
     try:
@@ -472,7 +468,6 @@ def api_reply():
 
 @app.route("/api/email/send-one", methods=["POST"])
 def api_email_send_one():
-    """Database'den tek kisiye MANUEL email gonderir."""
     data = request.get_json(force=True) or {}
     u = (data.get("username") or "").strip()
     if not u:
@@ -483,8 +478,7 @@ def api_email_send_one():
     if not c:
         return jsonify({"ok": False, "error": "Kisi bulunamadi."}), 404
     res = send_one(_campaign_cfg(), c)
-    code = 200 if res.get("ok") else 400
-    return jsonify(res), code
+    return jsonify(res), (200 if res.get("ok") else 400)
 
 @app.route("/api/stats")
 def api_stats():
@@ -495,10 +489,14 @@ def api_stats():
 
 @app.route("/api/db")
 def api_db():
+    status = request.args.get("status") or None
+    # status secilmediyse gonderilmis/yanitlanmislari GIZLE (DB'de kalir, tekrar atilmaz)
     return jsonify({"ok": True, "rows": crm.list_contacts(
-        status=request.args.get("status") or None,
+        status=status,
         channel=request.args.get("channel") or None,
-        search=request.args.get("q", ""), limit=800)})
+        search=request.args.get("q", ""),
+        exclude_sent=(status is None),
+        limit=800)})
 
 @app.route("/api/sent-emails")
 def api_sent_emails():
@@ -520,7 +518,6 @@ def api_delete():
 
 @app.route("/api/db/delete-bulk", methods=["POST"])
 def api_delete_bulk():
-    """Toplu silme. body: {usernames:[...]} ya da {status:'queued'|'all'}."""
     data = request.get_json(force=True) or {}
     if data.get("usernames"):
         n = crm.delete_many(data["usernames"])
@@ -550,8 +547,6 @@ def api_email_status():
 def api_email_stop():
     stop_campaign()
     return jsonify({"ok": True})
-
-# ---- bootstrap ----------------------------------------------------------
 
 def _split(v):
     return [t.strip() for t in (v or "").replace("\n", ",").split(",") if t.strip()]
