@@ -2,16 +2,15 @@
 CaptionAI Finder - AI Beyni (Groq, Llama 3.3 70B)
 =================================================
 
-- Kisiye ozel, TEK DILDE, dogal ve HATASIZ email + KONU uretir.
-  Turk creator'a Turkce, Ingilizce creator'a Ingilizce (kisinin lang'ine gore).
-- Cikti bozuksa (dil karisimi, sacma calque, cok uzun) reddedilir -> temiz fallback.
-- Yanit analizi + hashtag uretimi.
+- Kisiye ozel, TEK DILDE (kisinin gercek diline gore), dogal, HATASIZ,
+  yuksek tiklama getirecek email + KONU uretir.
+- Bozuk cikti (dil karisimi, sacma calque, tekrar, yanlis alfabe) reddedilir.
 """
 
 import json
 import random
 import re
-from typing import List, Optional
+from typing import List
 
 import requests
 
@@ -20,14 +19,12 @@ DEFAULT_MODEL = "llama-3.3-70b-versatile"
 
 CJK_RE = re.compile(r"[\u3000-\u9fff\u3040-\u30ff\uac00-\ud7af]")
 ARABIC_RE = re.compile(r"[\u0600-\u06ff]")
-URL_RE = re.compile(r"https?://|www\.", re.I)
 
 class QuotaError(Exception):
     """Tum key'ler tukendi/kota bitti."""
 
 LANG_NAMES = {"tr": "Turkish", "en": "English", "es": "Spanish", "de": "German", "fr": "French", "ar": "Arabic"}
 
-# Her dil icin tek cumlelik, dogal kurucu tanitimi (pitch'i modele birakmiyoruz).
 PITCH = {
     "tr": "CaptionAI adinda kucuk bir arac yaptim: video konusunu yaziyorsun, saniyeler icinde hazir caption oneriyor.",
     "en": "I built a little tool called CaptionAI: you type your video topic and it gives ready-to-post captions in seconds.",
@@ -37,7 +34,6 @@ PITCH = {
     "ar": "\u0635\u0646\u0639\u062a \u0623\u062f\u0627\u0629 \u0635\u063a\u064a\u0631\u0629 \u0627\u0633\u0645\u0647\u0627 CaptionAI: \u062a\u0643\u062a\u0628 \u0645\u0648\u0636\u0648\u0639 \u0627\u0644\u0641\u064a\u062f\u064a\u0648 \u0648\u062a\u0639\u0637\u064a\u0643 \u0643\u0627\u0628\u0634\u0646\u0627\u062a \u062c\u0627\u0647\u0632\u0629 \u0628\u062b\u0648\u0627\u0646\u064a.",
 }
 
-# Konu satirlari (kisiye ozel): {name} ismiyle doldurulur.
 SUBJECTS = {
     "tr": ["{name}, videolarin icin kucuk bir fikir", "{name} caption konusunda ufak bir sey", "{name}, icerigin cok iyi, bir onerim var"],
     "en": ["{name}, a small idea for your videos", "quick caption idea for you {name}", "{name}, love your content, one idea"],
@@ -47,14 +43,13 @@ SUBJECTS = {
     "ar": ["{name}\u060c \u0641\u0643\u0631\u0629 \u0635\u063a\u064a\u0631\u0629 \u0644\u0641\u064a\u062f\u064a\u0648\u0647\u0627\u062a\u0643"],
 }
 
-# Temiz, elle yazilmis fallback (AI bozuk cikarsa kullanilir).
 FALLBACK = {
-    "tr": "Selam {name}, videolarini bir suredir takip ediyorum ve tarzini gercekten begeniyorum. 16 yasindayim ve tek basima CaptionAI adinda kucuk bir arac gelistirdim: video konusunu yaziyorsun, saniyeler icinde hazir caption oneriyor. Caption yazmak beni hep zorladigi icin yaptim. Denersen fikrini cok merak ederim: {url}",
-    "en": "Hey {name}, I've been following your videos for a while and I really like your style. I'm 16 and I built a little tool on my own called CaptionAI: you type your video topic and it gives ready captions in seconds. I made it because writing captions always slowed me down. Would love your honest take if you try it: {url}",
-    "es": "Hola {name}, sigo tus videos desde hace un tiempo y me encanta tu estilo. Tengo 16 anos e hice una pequena herramienta llamada CaptionAI: escribes el tema de tu video y te da captions listos en segundos. La cree porque escribir captions siempre me costaba. Me encantaria tu opinion si la pruebas: {url}",
-    "de": "Hey {name}, ich verfolge deine Videos schon eine Weile und mag deinen Stil sehr. Ich bin 16 und habe allein ein kleines Tool namens CaptionAI gebaut: du gibst dein Videothema ein und bekommst in Sekunden fertige Captions. Ich habe es gemacht, weil mich das Schreiben von Captions immer aufgehalten hat. Uber dein ehrliches Feedback wurde ich mich freuen: {url}",
-    "fr": "Hey {name}, je suis tes videos depuis un moment et j'aime beaucoup ton style. J'ai 16 ans et j'ai cree seul un petit outil appele CaptionAI : tu tapes le sujet de ta video et il te donne des legendes pretes en quelques secondes. Je l'ai fait parce qu'ecrire les legendes me ralentissait toujours. Ton avis honnete m'interesserait si tu l'essaies : {url}",
-    "ar": "\u0645\u0631\u062d\u0628\u0627 {name}\u060c \u0623\u062a\u0627\u0628\u0639 \u0641\u064a\u062f\u064a\u0648\u0647\u0627\u062a\u0643 \u0645\u0646\u0630 \u0641\u062a\u0631\u0629 \u0648\u0623\u062d\u0628 \u0623\u0633\u0644\u0648\u0628\u0643. \u0639\u0645\u0631\u064a 16 \u0648\u0635\u0646\u0639\u062a \u0623\u062f\u0627\u0629 \u0635\u063a\u064a\u0631\u0629 \u0627\u0633\u0645\u0647\u0627 CaptionAI: \u062a\u0643\u062a\u0628 \u0645\u0648\u0636\u0648\u0639 \u0627\u0644\u0641\u064a\u062f\u064a\u0648 \u0648\u062a\u062d\u0635\u0644 \u0639\u0644\u0649 \u0643\u0627\u0628\u0634\u0646\u0627\u062a \u062c\u0627\u0647\u0632\u0629 \u0628\u062b\u0648\u0627\u0646\u064a. \u064a\u0647\u0645\u0646\u064a \u0631\u0623\u064a\u0643: {url}",
+    "tr": "Selam {name}, videolarini bir suredir takip ediyorum ve tarzini gercekten begeniyorum. 16 yasindayim ve tek basima CaptionAI adinda kucuk bir arac gelistirdim: video konusunu yaziyorsun, saniyeler icinde 4 hazir caption oneriyor. Caption yazmak beni hep zorladigi icin yaptim. Denersen fikrini cok merak ederim: {url}",
+    "en": "Hey {name}, I've been following your videos for a while and I really like your style. I'm 16 and I built a little tool on my own called CaptionAI: you type your video topic and it gives 4 ready captions in seconds. I made it because writing captions always slowed me down. Would love your honest take if you try it: {url}",
+    "es": "Hola {name}, sigo tus videos desde hace un tiempo y me encanta tu estilo. Tengo 16 anos e hice una pequena herramienta llamada CaptionAI: escribes el tema de tu video y te da 4 captions listos en segundos. La cree porque escribir captions siempre me costaba. Me encantaria tu opinion si la pruebas: {url}",
+    "de": "Hey {name}, ich verfolge deine Videos schon eine Weile und mag deinen Stil sehr. Ich bin 16 und habe allein ein kleines Tool namens CaptionAI gebaut: du gibst dein Videothema ein und bekommst in Sekunden 4 fertige Captions. Ich habe es gemacht, weil mich das Schreiben von Captions immer aufgehalten hat. Uber dein ehrliches Feedback wurde ich mich freuen: {url}",
+    "fr": "Hey {name}, je suis tes videos depuis un moment et j'aime beaucoup ton style. J'ai 16 ans et j'ai cree seul un petit outil appele CaptionAI : tu tapes le sujet de ta video et il te donne 4 legendes pretes en quelques secondes. Je l'ai fait parce qu'ecrire les legendes me ralentissait. Ton avis honnete m'interesserait si tu l'essaies : {url}",
+    "ar": "\u0645\u0631\u062d\u0628\u0627 {name}\u060c \u0623\u062a\u0627\u0628\u0639 \u0641\u064a\u062f\u064a\u0648\u0647\u0627\u062a\u0643 \u0648\u0623\u062d\u0628 \u0623\u0633\u0644\u0648\u0628\u0643. \u0639\u0645\u0631\u064a 16 \u0648\u0635\u0646\u0639\u062a \u0623\u062f\u0627\u0629 \u0627\u0633\u0645\u0647\u0627 CaptionAI: \u062a\u0643\u062a\u0628 \u0645\u0648\u0636\u0648\u0639 \u0627\u0644\u0641\u064a\u062f\u064a\u0648 \u0648\u062a\u062d\u0635\u0644 \u0639\u0644\u0649 4 \u0643\u0627\u0628\u0634\u0646\u0627\u062a \u062c\u0627\u0647\u0632\u0629 \u0628\u062b\u0648\u0627\u0646\u064a. \u064a\u0647\u0645\u0646\u064a \u0631\u0623\u064a\u0643: {url}",
 }
 
 class AIBrain:
@@ -104,7 +99,6 @@ class AIBrain:
         except Exception:
             return False
 
-    # ---- dogrulama --------------------------------------------------------
     def _wrong_alphabet(self, text: str, lang: str) -> bool:
         if CJK_RE.search(text):
             return True
@@ -115,19 +109,16 @@ class AIBrain:
         return False
 
     def _looks_broken(self, text: str, lang: str) -> bool:
-        """Sacma/bozuk cikti sezgisi: cok kisa/uzun, yanlis alfabe, tekrar, calque."""
         t = (text or "").strip()
         if len(t) < 25 or len(t) > 900:
             return True
         if self._wrong_alphabet(t, lang):
             return True
         low = t.lower()
-        # bilinen bozuk kaliplar (Turkce calque'lar / repetisyon)
         bad = ["baglantiim kuruldu", "ba\u011flant\u0131\u0131m kuruldu", "seninle baglanti", "olarak seninle",
-               "connected with you", "i connected with you", "as someone who"]
+               "connected with you", "i connected with you", "as someone who", "baja blast"]
         if any(b in low for b in bad):
             return True
-        # ayni cumle iki kez (model tekrarlamis)
         parts = [p.strip() for p in re.split(r"[.!?\n]", t) if len(p.strip()) > 12]
         if len(parts) != len(set(p.lower() for p in parts)):
             return True
@@ -142,7 +133,6 @@ class AIBrain:
         return t.strip()
 
     def _proofread(self, text: str, lang: str) -> str:
-        """Sadece yazim/dilbilgisi duzeltir; anlami/tonu korur."""
         lang_name = LANG_NAMES.get(lang, "English")
         system = (f"You are a meticulous native {lang_name} proofreader. Fix ONLY spelling, grammar and "
                   f"awkward word choices so it reads like a real native speaker wrote it. Keep the same meaning, "
@@ -155,19 +145,17 @@ class AIBrain:
         except Exception:
             return text
 
-    # ---- ana uretim -------------------------------------------------------
     def _clean_fallback(self, name, lang, url) -> str:
         base = FALLBACK.get(lang, FALLBACK["en"])
         return base.replace("{name}", name or "").replace("{url}", url or "")
 
     def make_subject(self, creator, lang) -> str:
+        if lang not in LANG_NAMES:
+            lang = "en"
         name = creator.get("nickname") or creator.get("username", "")
-        opts = SUBJECTS.get(lang, SUBJECTS["en"])
-        return random.choice(opts).replace("{name}", name).strip()
+        return random.choice(SUBJECTS.get(lang, SUBJECTS["en"])).replace("{name}", name).strip()
 
     def generate_dm(self, creator, lang, product_pitch="", learned_tips="", link_url="", channel="email") -> str:
-        """Kisiye ozel, TEK dilde, dogal ve hatasiz email govdesi uretir.
-        lang gecersizse en'e duser. Bozuk cikti reddedilir -> temiz fallback."""
         if lang not in LANG_NAMES:
             lang = "en"
         name = creator.get("nickname") or creator.get("username", "")
@@ -177,22 +165,22 @@ class AIBrain:
         url = link_url or "thecaptionai.com"
 
         system = (
-            f"You write short, warm, natural outreach emails, ENTIRELY in {lang_name}. "
+            f"You write short, warm, high-converting outreach emails, ENTIRELY in {lang_name}. "
             f"You are a real 16-year-old solo developer, not a marketer. Write like a human texting a creator you admire. "
-            f"NEVER use marketing cliches, NEVER translate English phrases literally, NEVER repeat sentences."
+            f"NEVER use marketing cliches, NEVER translate English phrases literally, NEVER repeat a sentence."
         )
         user = (
-            f"Write ONE short outreach email body in {lang_name} ONLY (no other language, no other alphabet).\n\n"
-            f"Who I am: a 16-year-old who built this tool alone. Mention it naturally, humbly, once.\n"
-            f"What to say, in a natural flow (4-6 short sentences):\n"
-            f"1) A genuine, specific compliment about this creator.\n"
-            f"2) That writing captions used to slow me/us down.\n"
-            f"3) This exact idea, in your own words: {pitch}\n"
-            f"4) A friendly ask for honest feedback, and include this link once: {url}\n\n"
-            f"Creator name: {name}\n"
-            f"Creator bio (optional context, do NOT quote weirdly): {bio or '(none)'}\n\n"
-            f"Rules: perfect {lang_name} grammar and spelling. No subject line. No greeting like 'Dear'. "
-            f"No bullet points. No emojis at the start. Output ONLY the email body text."
+            f"Write ONE short outreach email body in {lang_name} ONLY (no other language or alphabet).\n\n"
+            f"Goal: make the creator curious enough to click the link. Sound genuine, not salesy.\n"
+            f"Flow (4-6 short sentences):\n"
+            f"1) A specific, genuine compliment about THIS creator (use their vibe/niche if the bio hints it).\n"
+            f"2) One honest line that writing captions used to slow me down.\n"
+            f"3) This idea in your own words: {pitch}\n"
+            f"4) A light, low-pressure ask to try it and share honest feedback. Include this link once: {url}\n\n"
+            f"I am 16 and built it alone (mention humbly, once).\n"
+            f"Creator name: {name}\nCreator bio: {bio or '(none)'}\n\n"
+            f"Perfect {lang_name} grammar/spelling. No subject line. No 'Dear'. No bullet points. "
+            f"No emoji at the start. Output ONLY the email body."
             + (f"\nWhat gets more replies: {learned_tips}" if learned_tips else "")
         )
         try:
@@ -201,10 +189,8 @@ class AIBrain:
             raise
         except Exception:
             return self._clean_fallback(name, lang, url)
-
         if self._looks_broken(out, lang):
             return self._clean_fallback(name, lang, url)
-        # link yoksa dogal ekle
         if url and url.lower() not in out.lower():
             out = out.rstrip(" .") + f": {url}"
         out = self._proofread(out, lang)

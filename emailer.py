@@ -2,12 +2,9 @@
 CaptionAI Finder - Cok Hesapli Otomatik Email Gonderici
 =======================================================
 
-accounts: [{email, password(app pw), from_name}, ...]
-Her hesap gunde daily_limit kadar atar; dolunca sonraki hesaba gecer.
-Ayni email adresine ikinci kez atmaz.
-
-Govde: kisinin CRM'de kayitli hazir mesaji varsa onu kullanir; yoksa build_body.
-Konu: build_subject(kisi) ile KISIYE OZEL uretilir; yoksa sabit subject.
+Her hesap gunde daily_limit kadar atar; dolunca sonrakine gecer. Ayni email'e
+iki kez atmaz. Konu KISIYE OZEL (build_subject). Govde kayitliysa tekrar
+uretilmez. send_one: panelden tek kisiye manuel gonderim.
 """
 
 import random
@@ -16,7 +13,7 @@ import threading
 import time
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Callable, Dict, List, Optional
+from typing import Callable, List, Optional
 
 import crm
 
@@ -26,10 +23,8 @@ SMTP_PRESETS = {
     "yahoo": ("smtp.mail.yahoo.com", 587),
 }
 
-_state = {
-    "running": False, "sent": 0, "failed": 0, "total": 0,
-    "last": "", "error": "", "stopped": False, "active_account": "",
-}
+_state = {"running": False, "sent": 0, "failed": 0, "total": 0,
+          "last": "", "error": "", "stopped": False, "active_account": ""}
 _lock = threading.Lock()
 
 def get_status() -> dict:
@@ -56,10 +51,10 @@ def _send(server, from_addr, from_name, to_addr, subject, body) -> None:
     server.sendmail(from_addr, [to_addr], msg.as_string())
 
 def _subject_for(cfg, c) -> str:
-    build_subject: Optional[Callable[[dict], str]] = cfg.get("build_subject")
-    if build_subject:
+    bs: Optional[Callable[[dict], str]] = cfg.get("build_subject")
+    if bs:
         try:
-            s = (build_subject(c) or "").strip()
+            s = (bs(c) or "").strip()
             if s:
                 return s
         except Exception:
@@ -89,13 +84,11 @@ def _run(cfg: dict) -> None:
 
     if not queue:
         with _lock:
-            _state["running"] = False
-            _state["error"] = "Gonderilecek email'li kisi yok."
+            _state["running"] = False; _state["error"] = "Gonderilecek email'li kisi yok."
         return
     if not accounts:
         with _lock:
-            _state["running"] = False
-            _state["error"] = "Hic email hesabi eklenmemis."
+            _state["running"] = False; _state["error"] = "Hic email hesabi eklenmemis."
         return
 
     qi = 0
@@ -108,8 +101,7 @@ def _run(cfg: dict) -> None:
         from_name = acc.get("from_name", "")
         if not user or not pw:
             continue
-        already = crm.sent_today_account(user)
-        remaining = max(0, daily_limit - already)
+        remaining = max(0, daily_limit - crm.sent_today_account(user))
         if remaining <= 0:
             continue
         with _lock:
@@ -126,8 +118,7 @@ def _run(cfg: dict) -> None:
                 with _lock:
                     if _state["stopped"]:
                         break
-                c = queue[qi]
-                qi += 1
+                c = queue[qi]; qi += 1
                 body = (c.get("message") or "").strip() or build_body(c)
                 subject = _subject_for(cfg, c)
                 try:
@@ -136,12 +127,10 @@ def _run(cfg: dict) -> None:
                     crm.mark_sent(c["username"], channel="email", account=user)
                     sent_this_acc += 1
                     with _lock:
-                        _state["sent"] += 1
-                        _state["last"] = c["email"]
+                        _state["sent"] += 1; _state["last"] = c["email"]
                 except Exception as e:  # noqa: BLE001
                     with _lock:
-                        _state["failed"] += 1
-                        _state["error"] = str(e)[:200]
+                        _state["failed"] += 1; _state["error"] = str(e)[:200]
                 time.sleep(random.uniform(min_delay, max_delay))
         finally:
             try:
@@ -155,7 +144,6 @@ def _run(cfg: dict) -> None:
         _state["running"] = False
 
 def send_one(cfg: dict, contact: dict) -> dict:
-    """Tek bir kisiye hemen email atar (panel 'Gonder' butonu icin). Senkron."""
     accounts = cfg.get("accounts") or []
     to = (contact.get("email") or "").strip()
     if not to:

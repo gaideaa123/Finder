@@ -1,4 +1,4 @@
-"""CaptionAI Finder - CRM (SQLite). Kuyruk, durum, email dedup, hesap takibi, DB yonetimi."""
+"""CaptionAI Finder - CRM (SQLite). Kuyruk, durum, email dedup, DB yonetimi."""
 
 import os
 import sqlite3
@@ -160,12 +160,16 @@ def stats() -> dict:
             "with_email": with_email, "reply_rate": reply_rate}
 
 def list_contacts(status: Optional[str] = None, channel: Optional[str] = None,
-                  search: str = "", limit: int = 500) -> List[dict]:
+                  search: str = "", exclude_statuses: Optional[List[str]] = None,
+                  limit: int = 500) -> List[dict]:
     q = "SELECT * FROM contacts WHERE 1=1"
     args: list = []
     if status:
         q += " AND status=?"
         args.append(status)
+    elif exclude_statuses:
+        q += " AND status NOT IN (%s)" % ",".join("?" for _ in exclude_statuses)
+        args += list(exclude_statuses)
     if channel:
         q += " AND channel=?"
         args.append(channel)
@@ -198,7 +202,6 @@ def delete_contact(username: str) -> None:
         c.commit()
 
 def delete_many(usernames: List[str]) -> int:
-    """Toplu silme. usernames bosersa hicbir sey yapmaz."""
     usernames = [u for u in (usernames or []) if u]
     if not usernames:
         return 0
@@ -208,7 +211,6 @@ def delete_many(usernames: List[str]) -> int:
     return len(usernames)
 
 def delete_by_status(status: str) -> int:
-    """Belirli durumdaki (ya da 'all') tum kayitlari siler."""
     with _conn() as c:
         if status and status != "all":
             cur = c.execute("DELETE FROM contacts WHERE status=?", (status,))
