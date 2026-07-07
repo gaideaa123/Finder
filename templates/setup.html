@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CaptionAI · Kurulum</title>
+<style>
+  :root { --bg:#0b0b12; --panel:#14141f; --panel-2:#1b1b2a; --border:#2a2a3c;
+    --text:#e9e9f2; --muted:#a0a0b8; --accent:#a855f7; --accent-2:#ec4899; --green:#22c55e; --red:#ef4444; --amber:#f59e0b; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--text); }
+  .wrap { max-width:820px; margin:0 auto; padding:28px 20px 90px; }
+  h1 { font-size:22px; display:flex; align-items:center; gap:10px; margin:0 0 4px; }
+  h1 .dot { width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;font-size:18px; }
+  .sub { color:var(--muted); font-size:13px; margin:0 0 18px; }
+  .steps { display:flex; gap:8px; margin:0 0 18px; flex-wrap:wrap; }
+  .step { font-size:12px; padding:6px 12px; border-radius:999px; background:var(--panel-2); border:1px solid var(--border); color:var(--muted); }
+  .step b { color:var(--text); }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:20px; margin:14px 0; }
+  .card h2 { margin:0 0 4px; font-size:15px; }
+  .card p.hint { margin:2px 0 12px; color:var(--muted); font-size:12px; line-height:1.6; }
+  .card h2 .num { display:inline-grid; place-items:center; width:22px;height:22px; border-radius:7px; background:var(--panel-2); border:1px solid var(--border); font-size:12px; margin-right:8px; }
+  label { display:block; font-size:12px; color:var(--muted); margin:12px 0 6px; }
+  input, textarea { width:100%; background:var(--panel-2); border:1px solid var(--border); color:var(--text); border-radius:10px; padding:10px 12px; font-size:13px; font-family:ui-monospace,monospace; }
+  textarea { min-height:64px; resize:vertical; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; }
+  .row > div { flex:1; min-width:130px; }
+  .btn { display:inline-flex; align-items:center; gap:8px; border:none; cursor:pointer; border-radius:11px; font-weight:700; font-size:14px; padding:12px 18px; color:white; background:linear-gradient(135deg,var(--accent),var(--accent-2)); }
+  .btn:disabled { opacity:.5; cursor:not-allowed; }
+  .btn.secondary { background:var(--panel-2); border:1px solid var(--border); }
+  .btn.big { width:100%; justify-content:center; font-size:16px; padding:15px; }
+  .acct { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; align-items:center; }
+  .acct input { flex:1; min-width:120px; }
+  .acct .x { cursor:pointer; color:var(--muted); padding:6px 10px; border:1px solid var(--border); border-radius:9px; background:var(--panel-2); }
+  .status { margin-top:10px; font-size:13px; color:var(--muted); min-height:18px; }
+  .status.err { color:var(--accent-2); } .status.ok { color:var(--green); }
+  table { width:100%; border-collapse:collapse; font-size:12px; margin-top:10px; }
+  th,td { text-align:left; padding:7px 9px; border-bottom:1px solid var(--border); }
+  th { color:var(--muted); font-weight:600; }
+  .pill { font-size:11px; padding:2px 8px; border-radius:999px; border:1px solid var(--border); }
+  .pill.ok { color:var(--green); } .pill.bad { color:var(--red); } .pill.warn { color:var(--amber); }
+  .term { background:#07070d; border:1px solid var(--border); border-radius:12px; padding:14px; font-family:ui-monospace,monospace; font-size:12px; line-height:1.55; white-space:pre-wrap; max-height:340px; overflow:auto; color:#cfe9d4; margin-top:12px; display:none; }
+  .row.gap { align-items:center; gap:10px; }
+  code { background:var(--panel-2); padding:1px 6px; border-radius:6px; font-size:12px; }
+  .warnbox { background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.35); color:#f7d488; border-radius:12px; padding:12px 14px; font-size:12px; line-height:1.6; margin:14px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><span class="dot">🚀</span> CaptionAI Kurulum</h1>
+  <p class="sub">Anahtarlari yapistir → test et → tek tusla Fly.io'ya 7/24 kur. <a href="/checker" style="color:var(--accent)">Checker</a> · <a href="/" style="color:var(--accent)">Panel</a></p>
+  <div class="steps">
+    <span class="step"><b>1</b> Anahtarlar</span>
+    <span class="step"><b>2</b> Hedefleme</span>
+    <span class="step"><b>3</b> Kaydet & Test</span>
+    <span class="step"><b>4</b> Deploy</span>
+  </div>
+
+  <div class="warnbox">⚠️ Bu sayfa yalniz kendi bilgisayarinda calisir ve anahtarlarini <code>secrets.local.json</code>'a yazar (repoya gitmez). Deploy tusu senin makinende <code>deploy.sh</code>'i calistirir; Fly.io girisi ilk seferde tarayicida acilir.</div>
+
+  <div class="card">
+    <h2><span class="num">1</span>Anahtarlar</h2>
+    <p class="hint">Her satira bir tane (ya da virgulle ayir). Kayitli varsa maskeli gorunur; degistirmek istemiyorsan bos birak.</p>
+    <label>Apify token(ları) <span id="apifyHave" style="color:var(--green)"></span></label>
+    <textarea id="apify" placeholder="apify_api_xxx"></textarea>
+    <label>Groq key(lerı) <span id="groqHave" style="color:var(--green)"></span></label>
+    <textarea id="groq" placeholder="gsk_xxx"></textarea>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">2</span>Email hesapları & Hedefleme</h2>
+    <p class="hint">Gmail + <b>uygulama şifresi</b> (normal şifre değil): <a href="https://myaccount.google.com/apppasswords" target="_blank" style="color:var(--accent)">apppasswords</a>. Her hesap günlük limite kadar atar, dolunca sıradakine geçer.</p>
+    <div id="accts"></div>
+    <div class="row gap" style="margin-top:10px"><button class="btn secondary" onclick="addAcct()">+ Hesap ekle</button></div>
+    <div class="row" style="margin-top:16px">
+      <div><label>Ülke/dil</label><input id="t_countries" placeholder="Turkiye"></div>
+      <div><label>Hashtag'ler</label><input id="t_hashtags" placeholder="yemektarifi, gunlukvlog, kombin"></div>
+    </div>
+    <div class="row">
+      <div><label>Min takipçi</label><input id="t_min" placeholder="3000"></div>
+      <div><label>Max takipçi</label><input id="t_max" placeholder="80000"></div>
+      <div><label>Tur başı hedef</label><input id="t_target" placeholder="60"></div>
+      <div><label>Günlük email/hesap</label><input id="t_daily" placeholder="30"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">3</span>Kaydet & Test</h2>
+    <p class="hint">Önce kaydet, sonra anahtarları canlı test et (Apify bakiye + Groq limit).</p>
+    <div class="row gap">
+      <button class="btn" onclick="save()">💾 Kaydet</button>
+      <button class="btn secondary" onclick="check()">🔍 Test et</button>
+    </div>
+    <div id="saveStatus" class="status"></div>
+    <div id="checkOut"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">4</span>Deploy (7/24 Fly.io)</h2>
+    <p class="hint">Tek tus. Fly CLI yoksa kurar, giriş açar, sunucu + kalıcı disk oluşturur, anahtarları secret olarak yükler ve başlatır.</p>
+    <div class="row gap">
+      <div style="flex:1"><label>App adı</label><input id="appName" value="captionai-finder"></div>
+    </div>
+    <button class="btn big" id="deployBtn" onclick="deploy()" style="margin-top:14px">🚀 Fly.io'ya Deploy Et</button>
+    <div id="deployStatus" class="status"></div>
+    <div id="term" class="term"></div>
+  </div>
+</div>
+
+<script>
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+  const accts=[];
+  function renderAccts(){
+    document.getElementById('accts').innerHTML = accts.map((a,i)=>
+      '<div class="acct"><input placeholder="email@gmail.com" value="'+esc(a.email)+'" oninput="accts['+i+'].email=this.value">'+
+      '<input placeholder="uygulama sifresi" value="'+esc(a.password||'')+'" oninput="accts['+i+'].password=this.value">'+
+      '<input placeholder="gonderen adi" value="'+esc(a.from_name||'')+'" oninput="accts['+i+'].from_name=this.value">'+
+      '<span class="x" onclick="delAcct('+i+')">sil</span></div>').join('') || '<p class="hint">Henüz hesap yok.</p>';
+  }
+  function addAcct(){ accts.push({email:'',password:'',from_name:''}); renderAccts(); }
+  function delAcct(i){ accts.splice(i,1); renderAccts(); }
+
+  async function load(){
+    const r=await fetch('/api/setup/load'); const d=await r.json();
+    if(d.apify_masked&&d.apify_masked.length) document.getElementById('apifyHave').textContent='(kayıtlı: '+d.apify_masked.join(', ')+')';
+    if(d.groq_masked&&d.groq_masked.length) document.getElementById('groqHave').textContent='(kayıtlı: '+d.groq_masked.join(', ')+')';
+    (d.accounts||[]).forEach(a=>accts.push({email:a.email||'',password:'',from_name:a.from_name||''}));
+    renderAccts();
+    const t=d.targeting||{};
+    if(t.countries) document.getElementById('t_countries').value=Array.isArray(t.countries)?t.countries.join(', '):t.countries;
+    if(t.hashtags) document.getElementById('t_hashtags').value=Array.isArray(t.hashtags)?t.hashtags.join(', '):t.hashtags;
+    if(t.min_followers) document.getElementById('t_min').value=t.min_followers;
+    if(t.max_followers) document.getElementById('t_max').value=t.max_followers;
+    if(t.target_count) document.getElementById('t_target').value=t.target_count;
+    if(t.daily_limit) document.getElementById('t_daily').value=t.daily_limit;
+  }
+
+  function targeting(){
+    const g=id=>document.getElementById(id).value.trim();
+    const t={};
+    if(g('t_countries')) t.countries=g('t_countries');
+    if(g('t_hashtags')) t.hashtags=g('t_hashtags');
+    if(g('t_min')) t.min_followers=+g('t_min');
+    if(g('t_max')) t.max_followers=+g('t_max');
+    if(g('t_target')) t.target_count=+g('t_target');
+    if(g('t_daily')) t.daily_limit=+g('t_daily');
+    return t;
+  }
+  function setS(id,msg,cls){ const el=document.getElementById(id); el.textContent=msg; el.className='status'+(cls?' '+cls:''); }
+
+  async function save(){
+    setS('saveStatus','Kaydediliyor...');
+    const body={ apify_tokens:document.getElementById('apify').value, groq_keys:document.getElementById('groq').value,
+      email_accounts:accts.filter(a=>a.email&&a.password), targeting:targeting() };
+    const r=await fetch('/api/setup/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json();
+    if(d.ok){ setS('saveStatus','Kaydedildi ✅  Apify:'+d.apify+' · Groq:'+d.groq+' · Hesap:'+d.accounts,'ok'); document.getElementById('apify').value=''; document.getElementById('groq').value=''; load(); }
+    else setS('saveStatus','Hata: '+(d.error||'?'),'err');
+  }
+
+  async function check(){
+    setS('saveStatus','Test ediliyor (birkaç saniye)...');
+    const r=await fetch('/api/setup/check'); const d=await r.json();
+    if(!d.ok){ setS('saveStatus','Hata: '+(d.error||'?'),'err'); return; }
+    setS('saveStatus','Test tamam.','ok');
+    let h='<table><tr><th>Apify</th><th>Plan</th><th>Kullanıldı</th><th>Kalan</th></tr>';
+    (d.apify||[]).forEach(r=>{ h += r.ok? '<tr><td>'+esc(r.token)+'</td><td>'+esc(r.plan)+'</td><td>$'+esc(r.used_usd)+'</td><td>'+(r.credit_left_usd==null?'-':'$'+esc(r.credit_left_usd))+'</td></tr>' : '<tr><td>'+esc(r.token)+'</td><td colspan=3><span class="pill bad">'+esc(r.error||'hata')+'</span></td></tr>'; });
+    h+='</table><table><tr><th>Groq</th><th>Istek/gün</th><th>Token/dk</th><th>Durum</th></tr>';
+    (d.groq||[]).forEach(r=>{ const st=r.status===429?'<span class="pill warn">429</span>':(r.ok?'<span class="pill ok">ok</span>':'<span class="pill bad">'+esc(r.error||'hata')+'</span>'); h += '<tr><td>'+esc(r.key)+'</td><td>'+esc(r.req_remaining_day||'?')+'/'+esc(r.req_limit_day||'?')+'</td><td>'+esc(r.tok_remaining_min||'?')+'/'+esc(r.tok_limit_min||'?')+'</td><td>'+st+'</td></tr>'; });
+    h+='</table>';
+    document.getElementById('checkOut').innerHTML=h;
+  }
+
+  function deploy(){
+    const app=document.getElementById('appName').value.trim()||'captionai-finder';
+    const term=document.getElementById('term'); term.style.display='block'; term.textContent='';
+    const btn=document.getElementById('deployBtn'); btn.disabled=true;
+    setS('deployStatus','Deploy çalışıyor... (ilk seferde tarayıcıda Fly girişi açılabilir)');
+    const es=new EventSource('/api/setup/deploy?app='+encodeURIComponent(app));
+    es.onmessage=(e)=>{
+      if(e.data==='[DONE]'){ es.close(); btn.disabled=false; setS('deployStatus','Bitti. Panel: https://'+app+'.fly.dev  ·  Checker: /checker','ok'); return; }
+      term.textContent += e.data+'\n'; term.scrollTop=term.scrollHeight;
+    };
+    es.onerror=()=>{ es.close(); btn.disabled=false; setS('deployStatus','Bağlantı kesildi. Terminalden `./deploy.sh` ile de deneyebilirsin.','err'); };
+  }
+
+  load();
+</script>
+</body>
+</html>
