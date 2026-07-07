@@ -1,25 +1,19 @@
-"""Setup GUI - tek sayfadan kur: anahtarlari yapistir, test et, TEK TUSLA Fly'a deploy et.
+"""Setup GUI - anahtarlari yapistir, test et, hashtag uret, Oracle kurulum komutunu al.
 
-GUVENLIK: Bu sayfa anahtar yazar/okur ve deploy komutu calistirir. Bu yuzden
-SADECE kendi bilgisayarindan (localhost) acilir; server'da (Fly) kapalidir.
-Gercekten uzaktan acmak istersen ALLOW_SETUP=1 ver (onerilmez).
+GUVENLIK: Bu sayfa anahtar yazar/okur. SADECE kendi bilgisayarindan (localhost)
+acilir; server'da kapalidir. Uzaktan acmak istersen ALLOW_SETUP=1 (onerilmez).
 
 Acilis: `python app.py` -> http://127.0.0.1:5000/setup
 """
 
 import json
 import os
-import shutil
-import subprocess
 
-from flask import Blueprint, Response, jsonify, render_template, request
+from flask import Blueprint, jsonify, render_template, request
 
 setup_bp = Blueprint("setup", __name__)
 
-# Repo koku = bu dosyanin bulundugu klasor. deploy.sh burada.
 REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
-DEPLOY_SH = os.path.join(REPO_ROOT, "deploy.sh")
-
 SECRETS_FILE = os.path.join(os.environ.get("DATA_DIR", "."), "secrets.local.json")
 if not os.path.exists(SECRETS_FILE) and os.path.exists(os.path.join(REPO_ROOT, "secrets.local.json")):
     SECRETS_FILE = os.path.join(REPO_ROOT, "secrets.local.json")
@@ -55,20 +49,6 @@ def _read() -> dict:
         except Exception:
             return {}
     return {}
-
-def _find_bash():
-    """bash'i bulur. Windows'ta Git-Bash / WSL yollarini da dener."""
-    b = shutil.which("bash")
-    if b:
-        return b
-    for cand in (
-        r"C:\\Program Files\\Git\\bin\\bash.exe",
-        r"C:\\Program Files\\Git\\usr\\bin\\bash.exe",
-        r"C:\\Windows\\System32\\bash.exe",  # WSL
-    ):
-        if os.path.exists(cand):
-            return cand
-    return None
 
 @setup_bp.route("/setup")
 def setup_page():
@@ -118,14 +98,15 @@ def setup_save():
     with open(SECRETS_FILE, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
     return jsonify({"ok": True, "apify": len(out["apify_tokens"]),
-                    "groq": len(out["groq_keys"]), "accounts": len(out["email_accounts"])})
+                    "groq": len(out["groq_keys"]), "accounts": len(out["email_accounts"]),
+                    "path": os.path.abspath(SECRETS_FILE)})
 
 def _saved_groq_keys() -> list:
     return _read().get("groq_keys") or []
 
 @setup_bp.route("/api/setup/hashtags", methods=["POST"])
 def setup_hashtags():
-    """Kaydedilmis Groq key'leriyle (dosyadan) hashtag uretir. Restart gerekmez."""
+    """Kaydedilmis Groq key'leriyle hashtag uretir. Restart gerekmez."""
     keys = _saved_groq_keys()
     if not keys:
         return jsonify({"ok": False, "error": "Once Groq key kaydet."}), 400
@@ -155,48 +136,3 @@ def setup_check():
     return jsonify({"ok": True,
                     "apify": [apify_check(t) for t in apify],
                     "groq": [groq_check(k) for k in groq]})
-
-@setup_bp.route("/api/setup/deploy")
-def setup_deploy():
-    """deploy.sh'i calistirir, ciktisini canli (SSE) akitir. Platformdan bagimsiz."""
-    app_name = (request.args.get("app") or "captionai-finder").strip()
-    safe = "".join(ch for ch in app_name if ch.isalnum() or ch in "-_") or "captionai-finder"
-
-    def sse(msg):
-        return f"data: {msg}\n\n"
-
-    def gen():
-        yield sse("Deploy hazirlaniyor...")
-        if not os.path.exists(DEPLOY_SH):
-            yield sse(f"HATA: deploy.sh bulunamadi ({DEPLOY_SH}).")
-            yield sse("Once PR'i merge et ve repoyu guncelle (git pull), sonra tekrar dene.")
-            yield sse("[DONE]"); return
-        bash = _find_bash()
-        if not bash:
-            yield sse("HATA: 'bash' bulunamadi (\"sistem belirtilen dosyayi bulamiyor\").")
-            yield sse("Windows'taysan: Git for Windows kur (git-scm.com) ya da WSL ac, deploy'u Git-Bash'ten calistir.")
-            yield sse("Alternatif: terminalde  bash deploy.sh  komutunu elle calistir.")
-            yield sse("[DONE]"); return
-        try:
-            proc = subprocess.Popen(
-                [bash, DEPLOY_SH, safe],
-                cwd=REPO_ROOT,
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, bufsize=1,
-            )
-        except FileNotFoundError as e:
-            yield sse(f"HATA: calistirilamadi ({e}). 'bash deploy.sh {safe}' komutunu elle dene.")
-            yield sse("[DONE]"); return
-        except Exception as e:  # noqa: BLE001
-            yield sse(f"HATA: {e}")
-            yield sse("[DONE]"); return
-        try:
-            for line in iter(proc.stdout.readline, ""):
-                yield sse(line.rstrip())
-        finally:
-            proc.wait()
-        yield sse(f"[EXIT {proc.returncode}]")
-        yield sse("[DONE]")
-
-    return Response(gen(), mimetype="text/event-stream",
-                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

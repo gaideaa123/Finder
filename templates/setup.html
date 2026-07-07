@@ -29,7 +29,6 @@
   .btn:disabled { opacity:.5; cursor:not-allowed; }
   .btn.secondary { background:var(--panel-2); border:1px solid var(--border); }
   .btn.small { padding:9px 13px; font-size:13px; }
-  .btn.big { width:100%; justify-content:center; font-size:16px; padding:15px; }
   .acct { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; align-items:center; }
   .acct input { flex:1; min-width:120px; }
   .acct .x { cursor:pointer; color:var(--muted); padding:6px 10px; border:1px solid var(--border); border-radius:9px; background:var(--panel-2); }
@@ -40,7 +39,10 @@
   th { color:var(--muted); font-weight:600; }
   .pill { font-size:11px; padding:2px 8px; border-radius:999px; border:1px solid var(--border); }
   .pill.ok { color:var(--green); } .pill.bad { color:var(--red); } .pill.warn { color:var(--amber); }
-  .term { background:#07070d; border:1px solid var(--border); border-radius:12px; padding:14px; font-family:ui-monospace,monospace; font-size:12px; line-height:1.55; white-space:pre-wrap; max-height:340px; overflow:auto; color:#cfe9d4; margin-top:12px; display:none; }
+  ol.guide { margin:6px 0 0; padding-left:20px; font-size:13px; line-height:1.9; }
+  ol.guide a { color:var(--accent); }
+  .cmd { position:relative; background:#07070d; border:1px solid var(--border); border-radius:10px; padding:12px 44px 12px 12px; font-family:ui-monospace,monospace; font-size:12px; color:#cfe9d4; white-space:pre-wrap; margin-top:10px; }
+  .cmd .copy { position:absolute; top:8px; right:8px; cursor:pointer; border:1px solid var(--border); background:var(--panel-2); color:var(--muted); border-radius:8px; padding:4px 8px; font-size:11px; }
   .row.gap { align-items:center; gap:10px; }
   code { background:var(--panel-2); padding:1px 6px; border-radius:6px; font-size:12px; }
   .warnbox { background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.35); color:#f7d488; border-radius:12px; padding:12px 14px; font-size:12px; line-height:1.6; margin:14px 0; }
@@ -48,16 +50,16 @@
 </head>
 <body>
 <div class="wrap">
-  <h1><span class="dot">🚀</span> CaptionAI Kurulum</h1>
-  <p class="sub">Anahtarlari yapistir → test et → tek tusla Fly.io'ya 7/24 kur. <a href="/checker" style="color:var(--accent)">Checker</a> · <a href="/" style="color:var(--accent)">Panel</a></p>
+  <h1><span class="dot">🧠</span> CaptionAI Kurulum</h1>
+  <p class="sub">Anahtarlari yapistir → test et → kaydet. Sonra Oracle Cloud'da 7/24 (ücretsiz) calistir. <a href="/checker" style="color:var(--accent)">Checker</a> · <a href="/" style="color:var(--accent)">Panel</a></p>
   <div class="steps">
     <span class="step"><b>1</b> Anahtarlar</span>
     <span class="step"><b>2</b> Hedefleme</span>
     <span class="step"><b>3</b> Kaydet & Test</span>
-    <span class="step"><b>4</b> Deploy</span>
+    <span class="step"><b>4</b> Oracle'da 7/24</span>
   </div>
 
-  <div class="warnbox">⚠️ Bu sayfa yalniz kendi bilgisayarinda calisir ve anahtarlarini <code>secrets.local.json</code>'a yazar (repoya gitmez). Deploy tusu senin makinende <code>deploy.sh</code>'i calistirir; Fly.io girisi ilk seferde tarayicida acilir.</div>
+  <div class="warnbox">⚠️ Bu sayfa yalniz kendi bilgisayarinda calisir ve anahtarlarini <code>secrets.local.json</code>'a yazar (repoya gitmez). O dosyayi Oracle sunucuna kopyalayip 7/24 calistiracaksin (asagida).</div>
 
   <div class="card">
     <h2><span class="num">1</span>Anahtarlar</h2>
@@ -101,18 +103,28 @@
       <button class="btn secondary" onclick="check()">🔍 Test et</button>
     </div>
     <div id="saveStatus" class="status"></div>
+    <div id="savePath" class="status"></div>
     <div id="checkOut"></div>
   </div>
 
   <div class="card">
-    <h2><span class="num">4</span>Deploy (7/24 Fly.io)</h2>
-    <p class="hint">Tek tus. Fly CLI yoksa kurar, giriş açar, sunucu + kalıcı disk oluşturur, anahtarları secret olarak yükler ve başlatır.</p>
-    <div class="row gap">
-      <div style="flex:1"><label>App adı</label><input id="appName" value="captionai-finder"></div>
-    </div>
-    <button class="btn big" id="deployBtn" onclick="deploy()" style="margin-top:14px">🚀 Fly.io'ya Deploy Et</button>
-    <div id="deployStatus" class="status"></div>
-    <div id="term" class="term"></div>
+    <h2><span class="num">4</span>Oracle Cloud'da 7/24 (ücretsiz)</h2>
+    <p class="hint">Kart doğrulaması var ama <b>ücret alınmaz</b> (Always Free). Adımlar:</p>
+    <ol class="guide">
+      <li><a href="https://signup.oraclecloud.com" target="_blank">signup.oraclecloud.com</a> → hesap aç.</li>
+      <li>Console → <b>Compute → Instances → Create</b>. Image: <b>Ubuntu</b>. Shape: <b>VM.Standard.A1.Flex</b> (Always Free). SSH key'i indir.</li>
+      <li>VCN → <b>Security Lists → Default → Add Ingress</b>: 0.0.0.0/0, TCP, port <b>8080</b>.</li>
+      <li>VM'e SSH bağlan, sonra aşağıdaki komutu yapıştır:</li>
+    </ol>
+    <div class="cmd" id="cmd">git clone https://github.com/gaideaa123/Finder.git
+cd Finder && chmod +x install-oracle.sh && ./install-oracle.sh<span class="copy" onclick="copyCmd()">kopyala</span></div>
+    <ol class="guide" start="5">
+      <li>Bu bilgisayardaki <code id="scp">secrets.local.json</code>'ı VM'e kopyala (Kaydet'e bastıktan sonra oluşur):
+        <div class="cmd" id="scpcmd">scp -i ~/Downloads/ssh-key-*.key secrets.local.json ubuntu@VM_IP:~/Finder/<span class="copy" onclick="copyScp()">kopyala</span></div>
+      </li>
+      <li>VM'de: <code>sudo systemctl restart captionai</code> → bitti. Panel: <code>http://VM_IP:8080</code></li>
+    </ol>
+    <p class="hint">Detayli rehber repo'da <a href="https://github.com/gaideaa123/Finder/blob/main/ORACLE.md" target="_blank">ORACLE.md</a>.</p>
   </div>
 </div>
 
@@ -163,7 +175,9 @@
       email_accounts:accts.filter(a=>a.email&&a.password), targeting:targeting() };
     const r=await fetch('/api/setup/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const d=await r.json();
-    if(d.ok){ setS('saveStatus','Kaydedildi ✅  Apify:'+d.apify+' · Groq:'+d.groq+' · Hesap:'+d.accounts,'ok'); document.getElementById('apify').value=''; document.getElementById('groq').value=''; load(); return true; }
+    if(d.ok){ setS('saveStatus','Kaydedildi ✅  Apify:'+d.apify+' · Groq:'+d.groq+' · Hesap:'+d.accounts,'ok');
+      if(d.path) setS('savePath','Dosya: '+d.path);
+      document.getElementById('apify').value=''; document.getElementById('groq').value=''; load(); return true; }
     setS('saveStatus','Hata: '+(d.error||'?'),'err'); return false;
   }
 
@@ -198,18 +212,8 @@
     document.getElementById('checkOut').innerHTML=h;
   }
 
-  function deploy(){
-    const app=document.getElementById('appName').value.trim()||'captionai-finder';
-    const term=document.getElementById('term'); term.style.display='block'; term.textContent='';
-    const btn=document.getElementById('deployBtn'); btn.disabled=true;
-    setS('deployStatus','Deploy çalışıyor... (ilk seferde tarayıcıda Fly girişi açılabilir)');
-    const es=new EventSource('/api/setup/deploy?app='+encodeURIComponent(app));
-    es.onmessage=(e)=>{
-      if(e.data==='[DONE]'){ es.close(); btn.disabled=false; setS('deployStatus','Bitti. Panel: https://'+app+'.fly.dev  ·  Checker: /checker','ok'); return; }
-      term.textContent += e.data+'\n'; term.scrollTop=term.scrollHeight;
-    };
-    es.onerror=()=>{ es.close(); btn.disabled=false; setS('deployStatus','Bağlantı kesildi. Terminalden `bash deploy.sh` ile de deneyebilirsin.','err'); };
-  }
+  function copyCmd(){ navigator.clipboard.writeText('git clone https://github.com/gaideaa123/Finder.git\ncd Finder && chmod +x install-oracle.sh && ./install-oracle.sh'); }
+  function copyScp(){ navigator.clipboard.writeText('scp -i ~/Downloads/ssh-key-*.key secrets.local.json ubuntu@VM_IP:~/Finder/'); }
 
   load();
 </script>
