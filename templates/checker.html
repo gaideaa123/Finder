@@ -38,7 +38,7 @@
     <h1><span class="dot">🔋</span> Anahtar Checker</h1>
     <a class="back" href="/">← Panele don</a>
   </div>
-  <p class="muted">Server'da yuklu anahtarlar (env / <code>secrets.local.json</code>) sayfa acilinca otomatik taranir. Ayrica asagiya elle yapistirip da tarayabilirsin. Anahtarlar maskeli gosterilir.</p>
+  <p class="muted">Server'da yuklu anahtarlar (env / <code>secrets.local.json</code>) sayfa acilinca otomatik ve her 5 dakikada bir taranir. Ayrica asagiya elle yapistirip da tarayabilirsin. Anahtarlar maskeli gosterilir.</p>
 
   <div class="card">
     <h2>Apify · bakiye & kullanim</h2>
@@ -101,17 +101,17 @@
     document.getElementById('groqOut').innerHTML=groqTable(d.results);
   }
   async function auto(){
-    document.getElementById('apifyStatus').textContent='Server anahtarlari taraniyor...';
-    document.getElementById('groqStatus').textContent='Server anahtarlari taraniyor...';
     try{
       const r=await fetch('/api/check/auto'); const d=await r.json();
-      document.getElementById('apifyStatus').textContent = (d.apify&&d.apify.length)?'':'Server\'da Apify anahtari yok (elle yapistir).';
-      document.getElementById('groqStatus').textContent = (d.groq&&d.groq.length)?'':'Server\'da Groq anahtari yok (elle yapistir).';
+      const stamp=new Date().toLocaleTimeString();
+      document.getElementById('apifyStatus').textContent = (d.apify&&d.apify.length)?('Son tarama: '+stamp):'Server\'da Apify anahtari yok (elle yapistir).';
+      document.getElementById('groqStatus').textContent = (d.groq&&d.groq.length)?('Son tarama: '+stamp):'Server\'da Groq anahtari yok (elle yapistir).';
       if(d.apify&&d.apify.length) document.getElementById('apifyOut').innerHTML=apifyTable(d.apify);
       if(d.groq&&d.groq.length) document.getElementById('groqOut').innerHTML=groqTable(d.groq);
-    }catch(e){ document.getElementById('apifyStatus').textContent=''; document.getElementById('groqStatus').textContent=''; }
+    }catch(e){}
   }
   auto();
+  setInterval(auto, 300000); // her 5 dakikada bir otomatik yeniden tara
 </script>
 </body>
 </html>
