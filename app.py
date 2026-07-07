@@ -1,13 +1,11 @@
 """CaptionAI Finder - Groq AI + Apify + coklu hesap Email + CRM + Auto dongu.
 
 Email-only autopilot: TikTok'ta creator bulur -> email'ini bulur -> Groq ile
-hiper-ozel EMAIL uretir -> otomatik gonderir. DM GONDERMEZ. Ayni kisiyi tekrar
-getirmez (CRM dedup + arama sirasinda eleme).
+kisiye ozel, HATASIZ ve TEK DILDE (kisinin diline gore) EMAIL uretir -> otomatik
+gonderir. Konu satiri da kisiye ozel. Ayni kisiyi tekrar getirmez.
 
-Max performans: HER hashtag kombinasyonu icin hedef 60 kisi taranir; bir Apify
-token/kota bitince otomatik digerine gecer. Anahtarlar arka planda SUREKLI kontrol edilir.
-
-Sayfalar:  /  panel  ·  /checker bakiye  ·  /setup kurulum GUI (anahtar gir + baslat)
+Sayfalar:  /  panel (her sey burada: anahtar, arama, kuyruk, email, database, analiz)
+           /checker bakiye  ·  /setup kurulum GUI (opsiyonel)
 """
 
 import json
@@ -19,7 +17,7 @@ from flask import Flask, jsonify, render_template, request
 
 import crm
 from finder import find_creators, SUPPORTED_LANGS, lang_for_country, country_to_iso
-from emailer import start_email_campaign, get_status as email_status, stop_campaign
+from emailer import start_email_campaign, get_status as email_status, stop_campaign, send_one
 
 try:
     from ai import AIBrain, QuotaError
@@ -50,27 +48,15 @@ STATE = {
 _auto_lock = threading.Lock()
 _monitor_started = False
 
-PRODUCT_PITCH = os.environ.get("PRODUCT_PITCH") or (
-    "CaptionAI: type your video topic and in 3 seconds get 4 viral-formula captions "
-    "with strong hooks + ready hashtags, in 6 languages. Built solo by a 16-year-old."
-)
-
 FALLBACK = {
-    "tr": "selam {name}, videolarini bir suredir takip ediyorum, tarzin cok iyi. caption yazmak beni hep zorluyordu, 16 yasindayim bunun icin kucuk bir arac yaptim: konuyu yaz saniyeler icinde 4 hazir caption. denersen fikrini merak ederim, link biomda",
-    "en": "hey {name}, been following your stuff and your style is great. writing captions always slowed me down, so at 16 i built a little tool: type the topic, get 4 ready captions in seconds. would love your honest take, link's in my bio",
-    "es": "hola {name}, sigo tu contenido y tu estilo me encanta. escribir captions me costaba, con 16 anos hice una herramienta: escribes el tema y salen 4 captions en segundos. me encantaria tu opinion, link en mi bio",
-    "de": "hey {name}, verfolge deinen content, dein stil ist top. captions schreiben hat mich aufgehalten, mit 16 hab ich ein tool gebaut: thema eingeben, 4 fertige captions in sekunden. feedback ware toll, link in bio",
-    "fr": "hey {name}, je suis ton contenu, ton style est top. ecrire les legendes me ralentissait, a 16 ans j'ai fait un outil: tu tapes le sujet, 4 legendes en secondes. ton avis m'interesse, lien dans ma bio",
-    "ar": "\u0645\u0631\u062d\u0628\u0627 {name}\u060c \u0623\u062a\u0627\u0628\u0639 \u0645\u062d\u062a\u0648\u0627\u0643 \u0648\u0623\u0633\u0644\u0648\u0628\u0643 \u0631\u0627\u0626\u0639. \u0643\u062a\u0627\u0628\u0629 \u0627\u0644\u0643\u0627\u0628\u0634\u0646 \u0643\u0627\u0646\u062a \u062a\u0628\u0637\u0626\u0646\u064a\u060c \u0648\u0639\u0645\u0631\u064a 16 \u0635\u0646\u0639\u062a \u0623\u062f\u0627\u0629: \u062a\u0643\u062a\u0628 \u0627\u0644\u0645\u0648\u0636\u0648\u0639 \u0648\u062a\u0639\u0637\u064a\u0643 4 \u0643\u0627\u0628\u0634\u0646\u0627\u062a \u0628\u062b\u0648\u0627\u0646\u064a. \u064a\u0647\u0645\u0646\u064a \u0631\u0623\u064a\u0643\u060c \u0627\u0644\u0631\u0627\u0628\u0637 \u0628\u0627\u0644\u0628\u0627\u064a\u0648",
+    "tr": "Selam {name}, videolarini bir suredir takip ediyorum ve tarzini gercekten begeniyorum. 16 yasindayim ve tek basima CaptionAI adinda kucuk bir arac gelistirdim: video konusunu yaziyorsun, saniyeler icinde hazir caption oneriyor. Denersen fikrini cok merak ederim: {url}",
+    "en": "Hey {name}, I've been following your videos for a while and I really like your style. I'm 16 and I built a little tool called CaptionAI on my own: you type your video topic and it gives ready captions in seconds. Would love your honest take if you try it: {url}",
 }
 
-def _fallback(creator, channel="email"):
+def _fallback(creator):
     lang = creator.get("lang", "en")
-    msg = FALLBACK.get(lang, FALLBACK["en"]).replace("{name}", creator.get("nickname") or creator.get("username", ""))
-    if channel == "email":
-        for t in ["link biomda", "link's in my bio", "link en mi bio", "link in bio", "lien dans ma bio", "\u0627\u0644\u0631\u0627\u0628\u0637 \u0628\u0627\u0644\u0628\u0627\u064a\u0648"]:
-            msg = msg.replace(t, SITE_URL)
-    return msg
+    base = FALLBACK.get(lang, FALLBACK["en"])
+    return base.replace("{name}", creator.get("nickname") or creator.get("username", "")).replace("{url}", SITE_URL)
 
 def _brain():
     if AIBrain is None or not STATE["groq_keys"]:
@@ -80,18 +66,32 @@ def _brain():
     except Exception:
         return None
 
-def _dm_for(creator, channel="email", brain=None, learned=""):
+def _dm_for(creator, brain=None, learned=""):
     b = brain or _brain()
     if b:
         try:
-            return b.generate_dm(creator, creator.get("lang", "en"), PRODUCT_PITCH, learned,
-                                 link_url=SITE_URL, channel=channel)
+            return b.generate_dm(creator, creator.get("lang", "en"), link_url=SITE_URL,
+                                 learned_tips=learned, channel="email")
         except Exception:
             pass
-    return _fallback(creator, channel)
+    return _fallback(creator)
 
 def _email_body(creator):
-    return _dm_for(creator, channel="email")
+    return _dm_for(creator)
+
+def _email_subject(creator):
+    b = _brain()
+    if b:
+        try:
+            s = b.make_subject(creator, creator.get("lang", "en"))
+            if s:
+                return s
+        except Exception:
+            pass
+    name = creator.get("nickname") or creator.get("username", "")
+    lang = creator.get("lang", "en")
+    return (f"{name}, videolarin icin kucuk bir fikir" if lang == "tr"
+            else f"{name}, a small idea for your videos")
 
 def _run_search(data):
     tokens = STATE["apify_tokens"] or ([data.get("apify_token")] if data.get("apify_token") else [])
@@ -147,7 +147,7 @@ def _finalize(rows, countries):
             continue
         if em:
             seen_e.add(em)
-        r["message"] = _dm_for(r, channel="email", brain=brain, learned=learned)
+        r["message"] = _dm_for(r, brain=brain, learned=learned)
         fresh.append(r)
     crm.upsert_contacts(fresh)
     return fresh
@@ -190,9 +190,8 @@ def api_hashtags():
     if not b:
         return jsonify({"ok": False, "error": "Once Groq key ekle."}), 400
     try:
-        tags = b.generate_hashtags(
-            lang=data.get("lang", "tr"), countries=data.get("countries") or [],
-            niche_hint=data.get("niche", ""), count=int(data.get("count", 12)))
+        tags = b.generate_hashtags(lang=data.get("lang", "tr"), countries=data.get("countries") or [],
+                                   niche_hint=data.get("niche", ""), count=int(data.get("count", 12)))
         return jsonify({"ok": True, "hashtags": tags})
     except QuotaError:
         return jsonify({"ok": False, "error": "Groq kotasi bitti."}), 429
@@ -219,15 +218,20 @@ def api_search():
     fresh = _finalize(rows, data.get("countries") or [])
     return jsonify({"ok": True, "count": len(fresh), "creators": fresh})
 
-def _start_email():
-    if not STATE["accounts"]:
-        return {"ok": False, "error": "Once email hesabi ekle."}
-    return start_email_campaign({
-        "provider": os.environ.get("EMAIL_PROVIDER", "gmail"), "accounts": STATE["accounts"],
+def _campaign_cfg():
+    return {
+        "provider": os.environ.get("EMAIL_PROVIDER", "gmail"),
+        "accounts": STATE["accounts"],
         "subject": os.environ.get("EMAIL_SUBJECT", "videolarin icin ufak bir sey"),
         "daily_limit": int(os.environ.get("DAILY_LIMIT", 30)),
         "build_body": _email_body,
-    })
+        "build_subject": _email_subject,
+    }
+
+def _start_email():
+    if not STATE["accounts"]:
+        return {"ok": False, "error": "Once email hesabi ekle."}
+    return start_email_campaign(_campaign_cfg())
 
 def _combos_from(hashtags):
     hs = [h for h in (hashtags or []) if h]
@@ -274,7 +278,7 @@ def _auto_loop(data):
                         time.sleep(3)
                         slept += 3
                     continue
-                STATE["auto"]["last"] = "Yeni kisi kalmadi, durdu."
+                STATE["auto"]["last"] = "Yeni kisi kalmadi, bekleniyor."
                 break
     except Exception as e:  # noqa: BLE001
         STATE["auto"]["last"] = f"Durdu: {str(e)[:120]}"
@@ -310,7 +314,7 @@ def api_auto_stop():
     stop_campaign()
     return jsonify({"ok": True})
 
-# ---- GUI kontrol (setup sayfasindan Baslat/Durdur) -----------------------
+# ---- GUI kontrol (Baslat/Durdur) ----------------------------------------
 
 def _ctrl_ok():
     ra = (request.remote_addr or "").strip()
@@ -324,7 +328,6 @@ def _ctrl_ok():
     return (request.headers.get("X-Setup-Password") or request.args.get("pw")) == pw
 
 def _targeting_config():
-    """secrets.local.json targeting + env'den auto config uretir."""
     tg = {}
     for p in ("secrets.local.json", os.path.join(os.environ.get("DATA_DIR", "."), "secrets.local.json")):
         if os.path.exists(p):
@@ -367,7 +370,7 @@ def api_control_reload():
 def api_control_start():
     if not _ctrl_ok():
         return jsonify({"ok": False, "error": "auth"}), 403
-    bootstrap_from_env()  # dosyadan en guncel anahtar + hesaplari yukle
+    bootstrap_from_env()
     if not STATE["apify_tokens"]:
         return jsonify({"ok": False, "error": "Apify token yok. Once kaydet."}), 400
     if not STATE["groq_keys"]:
@@ -467,6 +470,22 @@ def api_reply():
     crm.mark_replied(u, reply, sentiment, category)
     return jsonify({"ok": True, "sentiment": sentiment, "category": category, "suggested_reply": suggested})
 
+@app.route("/api/email/send-one", methods=["POST"])
+def api_email_send_one():
+    """Database'den tek kisiye MANUEL email gonderir."""
+    data = request.get_json(force=True) or {}
+    u = (data.get("username") or "").strip()
+    if not u:
+        return jsonify({"ok": False, "error": "username gerekli"}), 400
+    if not STATE["accounts"]:
+        return jsonify({"ok": False, "error": "Once email hesabi ekle."}), 400
+    c = crm.get_contact(u)
+    if not c:
+        return jsonify({"ok": False, "error": "Kisi bulunamadi."}), 404
+    res = send_one(_campaign_cfg(), c)
+    code = 200 if res.get("ok") else 400
+    return jsonify(res), code
+
 @app.route("/api/stats")
 def api_stats():
     s = crm.stats()
@@ -498,6 +517,18 @@ def api_delete():
     if u:
         crm.delete_contact(u)
     return jsonify({"ok": True})
+
+@app.route("/api/db/delete-bulk", methods=["POST"])
+def api_delete_bulk():
+    """Toplu silme. body: {usernames:[...]} ya da {status:'queued'|'all'}."""
+    data = request.get_json(force=True) or {}
+    if data.get("usernames"):
+        n = crm.delete_many(data["usernames"])
+    elif data.get("status"):
+        n = crm.delete_by_status(data["status"])
+    else:
+        return jsonify({"ok": False, "error": "usernames ya da status gerekli"}), 400
+    return jsonify({"ok": True, "deleted": n})
 
 @app.route("/api/db/update", methods=["POST"])
 def api_update():
