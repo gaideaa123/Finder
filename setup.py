@@ -1,9 +1,11 @@
-"""Setup GUI - anahtarlari yapistir, test et, hashtag uret, Oracle kurulum komutunu al.
+"""Setup GUI - anahtarlari yapistir, test et, hashtag uret, BASLAT. Dosya elleme yok.
 
-GUVENLIK: Bu sayfa anahtar yazar/okur. SADECE kendi bilgisayarindan (localhost)
-acilir; server'da kapalidir. Uzaktan acmak istersen ALLOW_SETUP=1 (onerilmez).
+GUVENLIK:
+- Kendi bilgisayarinda (localhost) her zaman acilir.
+- Sunucuda: sadece ALLOW_SETUP=1 ise acilir. SETUP_PASSWORD verilirse sifre sorar
+  (header 'X-Setup-Password' ya da ?pw=...). install-oracle.sh bunlari otomatik ayarlar.
 
-Acilis: `python app.py` -> http://127.0.0.1:5000/setup
+Acilis: http://<host>:<port>/setup
 """
 
 import json
@@ -22,12 +24,26 @@ def _is_local() -> bool:
     ra = (request.remote_addr or "").strip()
     return ra in ("127.0.0.1", "::1", "localhost", "")
 
+def _authed() -> bool:
+    if _is_local():
+        return True
+    if os.environ.get("ALLOW_SETUP") != "1":
+        return False
+    pw = os.environ.get("SETUP_PASSWORD")
+    if not pw:
+        return True
+    given = request.headers.get("X-Setup-Password") or request.args.get("pw")
+    return given == pw
+
 @setup_bp.before_request
 def _guard():
-    if os.environ.get("ALLOW_SETUP") == "1":
-        return None
-    if not _is_local():
-        return jsonify({"ok": False, "error": "Setup yalnizca kendi bilgisayarinda acilir."}), 403
+    # Sayfanin kendisi (HTML) her zaman acilir; sifre kontrolu API'lerde.
+    if request.endpoint == "setup.setup_page":
+        if _is_local() or os.environ.get("ALLOW_SETUP") == "1":
+            return None
+        return jsonify({"ok": False, "error": "Setup kapali (ALLOW_SETUP=1 gerekli)."}), 403
+    if not _authed():
+        return jsonify({"ok": False, "error": "auth", "need_pw": True}), 403
     return None
 
 def _mask(s: str) -> str:
@@ -106,7 +122,6 @@ def _saved_groq_keys() -> list:
 
 @setup_bp.route("/api/setup/hashtags", methods=["POST"])
 def setup_hashtags():
-    """Kaydedilmis Groq key'leriyle hashtag uretir. Restart gerekmez."""
     keys = _saved_groq_keys()
     if not keys:
         return jsonify({"ok": False, "error": "Once Groq key kaydet."}), 400
@@ -115,11 +130,8 @@ def setup_hashtags():
         brain = AIBrain(keys)
         data = request.get_json(force=True) or {}
         tags = brain.generate_hashtags(
-            lang=data.get("lang", "tr"),
-            countries=data.get("countries") or [],
-            niche_hint=data.get("niche", ""),
-            count=int(data.get("count", 12)),
-        )
+            lang=data.get("lang", "tr"), countries=data.get("countries") or [],
+            niche_hint=data.get("niche", ""), count=int(data.get("count", 12)))
         return jsonify({"ok": True, "hashtags": tags})
     except Exception as e:  # noqa: BLE001
         return jsonify({"ok": False, "error": str(e)[:150]}), 500
