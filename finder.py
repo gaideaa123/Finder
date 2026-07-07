@@ -1,4 +1,10 @@
-"""CaptionAI Finder - Apify tabanli creator bulma (coklu token, 16GB, 6 dil)."""
+"""CaptionAI Finder - Apify tabanli creator bulma.
+
+- KISI BAZLI dil tespiti: her creator'in gercek diline gore (bio + isim).
+  Sinyal yoksa VARSAYILAN INGILIZCE (asla yanlislikla Turkce degil).
+- Coklu Apify token: biri bitince digerine gecer.
+- Arama sirasinda dedup: CRM'de olanlari (exclude_*) atla -> her tur yeni kisi.
+"""
 
 import json
 import os
@@ -9,7 +15,6 @@ from typing import Dict, List, Optional, Set
 import requests
 
 APIFY_BASE = "https://api.apify.com/v2"
-# seen_history DATA_DIR altinda tutulur (server'da kalici volume).
 HISTORY_FILE = os.path.join(os.environ.get("DATA_DIR", "."), "seen_history.json")
 
 SUPPORTED_LANGS = ["tr", "en", "es", "de", "fr", "ar"]
@@ -27,37 +32,43 @@ COUNTRY_LANG = {
 LANG_MAIN_COUNTRY = {"tr": "TR", "en": "US", "es": "ES", "de": "DE", "fr": "FR", "ar": "SA"}
 
 COUNTRY_NAME_TO_ISO = {
-    "turkiye": "TR", "turkey": "TR", "tr": "TR", "t\u00fcrkiye": "TR",
+    "turkiye": "TR", "t\u00fcrkiye": "TR", "turkey": "TR", "tr": "TR",
     "amerika": "US", "abd": "US", "usa": "US", "united states": "US", "us": "US", "ingilizce": "US", "english": "US",
     "ingiltere": "GB", "uk": "GB", "united kingdom": "GB", "gb": "GB",
     "almanya": "DE", "germany": "DE", "de": "DE", "almanca": "DE", "deutsch": "DE",
-    "fransa": "FR", "france": "FR", "fr": "FR", "francais": "FR",
-    "ispanya": "ES", "spain": "ES", "es": "ES", "ispanyolca": "ES", "espanol": "ES",
-    "arabistan": "SA", "saudi arabia": "SA", "sa": "SA", "arabic": "SA", "arab": "SA",
+    "fransa": "FR", "france": "FR", "fr": "FR", "frans\u0131zca": "FR", "francais": "FR",
+    "ispanya": "ES", "spain": "ES", "es": "ES", "ispanyolca": "ES", "espanol": "ES", "espa\u00f1ol": "ES",
+    "arabistan": "SA", "suudi arabistan": "SA", "saudi arabia": "SA", "sa": "SA", "arap\u00e7a": "SA", "arabic": "SA", "arab": "SA",
     "italya": "IT", "italy": "IT", "it": "IT",
     "hollanda": "NL", "netherlands": "NL", "nl": "NL",
     "kanada": "CA", "canada": "CA", "ca": "CA",
     "meksika": "MX", "mexico": "MX", "mx": "MX",
     "brezilya": "BR", "brazil": "BR", "br": "BR",
     "bae": "AE", "uae": "AE", "ae": "AE",
-    "misir": "EG", "egypt": "EG", "eg": "EG",
+    "misir": "EG", "m\u0131s\u0131r": "EG", "egypt": "EG", "eg": "EG",
 }
 
-TURKISH_CHARS = set("\u0131\u015f\u011f\u00fc\u00f6\u00e7\u0130")
+# Dile OZGU karakterler (guclu sinyal)
+TURKISH_CHARS = set("\u0131\u015f\u011f\u00f6\u00e7\u0130\u011e\u015e")  # i-noktasiz, s-cedilla, g-breve, o, c, I, G, S
 GERMAN_CHARS = set("\u00e4\u00f6\u00fc\u00df")
 SPANISH_CHARS = set("\u00f1\u00bf\u00a1")
 ARABIC_RE = re.compile(r"[\u0600-\u06FF]")
 EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
 
+# Dile OZGU kelimeler (icerik sinyali)
 LANG_WORDS = {
-    "tr": {"ve", "bir", "video", "takip", "icerik", "tarif", "yemek", "moda", "gezi",
-           "spor", "kanal", "abone", "merhaba", "selam", "turkiye", "turk", "hayat", "gunluk"},
-    "es": {"el", "la", "los", "las", "para", "con", "por", "vida", "hola", "gracias",
-           "contenido", "receta", "comida", "viaje", "moda", "belleza"},
-    "de": {"und", "der", "die", "das", "mit", "ich", "leben", "video", "kanal", "hallo",
-           "essen", "reise", "mode", "rezept"},
-    "fr": {"le", "la", "les", "pour", "avec", "et", "vie", "bonjour", "merci",
-           "recette", "cuisine", "voyage", "mode"},
+    "tr": {"ve", "bir", "i\u00e7in", "ile", "\u00e7ok", "video", "takip", "i\u00e7erik", "tarif",
+           "yemek", "moda", "gezi", "seyahat", "spor", "kanal", "abone", "merhaba", "selam",
+           "t\u00fcrkiye", "t\u00fcrk", "hayat", "g\u00fcnl\u00fck", "\u00f6\u011frenci", "anne", "ileti\u015fim", "ve", "benim"},
+    "en": {"the", "and", "for", "with", "your", "my", "life", "love", "content", "daily",
+           "food", "travel", "fashion", "beauty", "fitness", "business", "follow", "contact",
+           "welcome", "official", "creator", "tips", "lifestyle", "vlog", "recipes"},
+    "es": {"el", "la", "los", "las", "para", "con", "por", "vida", "amor", "videos",
+           "hola", "gracias", "contenido", "receta", "comida", "viaje", "moda", "belleza"},
+    "de": {"und", "der", "die", "das", "f\u00fcr", "mit", "ich", "leben", "video", "kanal",
+           "hallo", "essen", "reise", "mode", "rezept", "t\u00e4glich"},
+    "fr": {"le", "la", "les", "pour", "avec", "et", "vie", "vid\u00e9o", "bonjour", "merci",
+           "recette", "cuisine", "voyage", "mode", "beaut\u00e9", "quotidien"},
 }
 
 def load_history() -> Set[str]:
@@ -89,25 +100,37 @@ def lang_for_country(iso: Optional[str]) -> str:
         return "en"
     return COUNTRY_LANG.get(iso.upper(), "en")
 
-def detect_lang_from_text(text: str) -> Optional[str]:
+def detect_lang_from_text(text: str):
+    """Metinden dil tespiti. Guvenli degilse None doner (cagiran en'e duser).
+    Turkce'yi YALNIZCA guclu sinyalle secer (yanlislikla herkese tr atamamak icin)."""
     if not text:
         return None
     if ARABIC_RE.search(text):
         return "ar"
-    if any(ch in TURKISH_CHARS for ch in text):
-        return "tr"
-    if any(ch in GERMAN_CHARS for ch in text):
-        return "de"
-    if any(ch in SPANISH_CHARS for ch in text):
-        return "es"
     low = text.lower()
-    tokens = set(re.findall(r"[a-z\u00e0\u00e2\u00e4\u00e7\u00e9\u00e8\u00ea\u00eb\u00ee\u00ef\u00f4\u00f6\u00f9\u00fb\u00fc\u00f1]+", low))
-    best_lang, best_hits = None, 0
+    tokens = set(re.findall(r"[a-z\u00e0-\u00ff\u0131\u015f\u011f\u0130\u011e\u015e]+", low))
+
+    scores = {}
     for lang, words in LANG_WORDS.items():
-        hits = len(tokens & words)
-        if hits > best_hits:
-            best_lang, best_hits = lang, hits
-    return best_lang if best_hits >= 1 else None
+        scores[lang] = len(tokens & words)
+    # Karaktere ozgu ipuclari puani guclendirir
+    if any(ch in TURKISH_CHARS for ch in text):
+        scores["tr"] = scores.get("tr", 0) + 2
+    if any(ch in GERMAN_CHARS for ch in text):
+        scores["de"] = scores.get("de", 0) + 2
+    if any(ch in SPANISH_CHARS for ch in text):
+        scores["es"] = scores.get("es", 0) + 2
+
+    best = max(scores, key=scores.get) if scores else None
+    if best and scores[best] >= 1:
+        return best
+    return None
+
+def load_config(path: Optional[str] = None) -> dict:
+    if path is None:
+        path = "config.json" if os.path.exists("config.json") else "config.example.json"
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 def _first(d: dict, keys: List[str], default=None):
     for k in keys:
@@ -140,7 +163,7 @@ def normalize_item(item: dict) -> Optional[dict]:
         followers = 0
 
     bio = _first(item, ["bio", "signature", "authorMeta.signature", "description"], default="")
-    bio_link = _first(item, ["bio_link", "bioLink"], default="")
+    bio_link = _first(item, ["bio_link", "bioLink", "bioLink.link"], default="")
 
     email = _first(item, ["email", "authorMeta.email"], default="")
     if not email and bio:
@@ -154,9 +177,17 @@ def normalize_item(item: dict) -> Optional[dict]:
     iso = country_to_iso(country_raw)
 
     detected = detect_lang_from_text(f"{nickname} {bio}")
-    if not iso and detected:
-        iso = LANG_MAIN_COUNTRY.get(detected)
-    lang = lang_for_country(iso) if iso else (detected or "en")
+
+    # DIL SECIMI onceligi:
+    # 1) metinden guclu tespit (detected)
+    # 2) actor'un verdigi ulke (iso)
+    # 3) VARSAYILAN: ingilizce (asla yanlislikla tr degil)
+    if detected:
+        lang = detected
+    elif iso:
+        lang = lang_for_country(iso)
+    else:
+        lang = "en"
     if lang not in SUPPORTED_LANGS:
         lang = "en"
 
@@ -181,31 +212,26 @@ def _fetch_dataset(dataset_id: str, token: str, limit: int) -> List[dict]:
     data = resp.json()
     return data if isinstance(data, list) else []
 
-def _start_run(actor: str, tokens: List[str], actor_input: dict, memory: int):
-    """Token listesini sirayla dener; biri kabul edince (run, token) doner.
-    Hepsi basarisizsa RuntimeError."""
+def _start_run(actor: str, tokens: List[str], actor_input: dict):
     run_url = f"{APIFY_BASE}/acts/{actor}/runs"
     last_err = ""
     for tok in tokens:
-        tok = tok.strip()
+        tok = (tok or "").strip()
         if not tok:
             continue
-        for params in ({"token": tok, "memory": memory}, {"token": tok}):
-            try:
-                r = requests.post(run_url, params=params, json=actor_input, timeout=30)
-            except Exception as e:  # noqa: BLE001
-                last_err = str(e)
-                continue
-            if r.status_code < 400:
-                return r.json().get("data", {}), tok
-            last_err = f"{r.status_code}: {r.text[:150]}"
-            # Yetki/kota hatasiysa sonraki token'a gec; degilse belleksiz dene
-            if any(k in last_err.lower() for k in ["401", "403", "quota", "payment", "insufficient", "limit"]):
-                break
+        try:
+            r = requests.post(run_url, params={"token": tok}, json=actor_input, timeout=30)
+        except Exception as e:  # noqa: BLE001
+            last_err = str(e); continue
+        if r.status_code < 400:
+            return r.json().get("data", {}), tok
+        last_err = f"{r.status_code}: {r.text[:150]}"
+        if any(k in last_err.lower() for k in ["401", "402", "403", "quota", "payment", "insufficient", "unauthorized"]):
+            continue  # bu token bitti -> sonraki
+        break
     raise RuntimeError(f"Tum Apify token'lari basarisiz. Son hata -> {last_err}")
 
 def find_creators(cfg: dict) -> List[dict]:
-    # Coklu token: apify_tokens listesi ya da tek apify_token
     tokens = cfg.get("apify_tokens") or ([cfg.get("apify_token")] if cfg.get("apify_token") else [])
     tokens = [t for t in tokens if t and "YAPISTIR" not in t]
     if not tokens:
@@ -218,14 +244,11 @@ def find_creators(cfg: dict) -> List[dict]:
 
     min_f = int(cfg.get("min_followers", 3000))
     max_f = int(cfg.get("max_followers", 80000))
-    target = int(cfg.get("target_count", 100))
-    require_email = bool(cfg.get("require_email", False))
+    target = int(cfg.get("target_count", 60))
+    require_email = bool(cfg.get("require_email", True))
     strict_country = bool(cfg.get("strict_country", True))
-    skip_seen = bool(cfg.get("skip_seen", True))
-    apify_memory = int(cfg.get("apify_memory", 16384))
+    skip_seen = bool(cfg.get("skip_seen", False))
 
-    # ONEMLI (tekrar bug fix): CRM'de zaten olan kisiler/emailler ARAMA SIRASINDA
-    # atlanir; boylece her tur havuzda daha derine iner ve GERCEKTEN yeni kisi getirir.
     exclude_users = {str(u).lower() for u in (cfg.get("exclude_usernames") or set())}
     exclude_emails = {str(e).strip().lower() for e in (cfg.get("exclude_emails") or set()) if e}
 
@@ -238,8 +261,6 @@ def find_creators(cfg: dict) -> List[dict]:
 
     history = load_history() if skip_seen else set()
 
-    # Daha genis havuz: bilinenleri elediktan sonra target kadar YENI kalabilsin diye
-    # eskisinden (x6) daha derin cekiyoruz.
     max_results = max(int(target * 12) + len(exclude_users), target + 400)
     actor_input = cfg.get("apify_input") or {
         "hashtags": hashtags,
@@ -255,9 +276,9 @@ def find_creators(cfg: dict) -> List[dict]:
         actor_input["country_hint"] = sorted(wanted)[0]
 
     poll_interval = float(cfg.get("poll_interval", 3))
-    overall_timeout = float(cfg.get("overall_timeout", 360))
+    overall_timeout = float(cfg.get("overall_timeout", 300))
 
-    run, token = _start_run(actor, tokens, actor_input, apify_memory)
+    run, token = _start_run(actor, tokens, actor_input)
     run_id = run.get("id")
     dataset_id = run.get("defaultDatasetId")
     if not run_id or not dataset_id:
@@ -284,12 +305,12 @@ def find_creators(cfg: dict) -> List[dict]:
                 continue
             uname = rec["username"].lower()
             if uname in exclude_users:
-                continue  # CRM'de zaten var -> atla (tekrar getirme)
+                continue
             if skip_seen and uname in history:
                 continue
             em = (rec.get("email") or "").strip().lower()
             if em and em in exclude_emails:
-                continue  # bu email'e zaten ulasilmis -> atla
+                continue
             f = rec["followers"]
             if f and (f < min_f or f > max_f):
                 continue
