@@ -11,6 +11,10 @@ Coklu scraper: Apify (varsayilan) VEYA ScrapeCreators.
   cfg["scraper"] == "scrapecreators" -> scrapers.py devreye girer.
   Aksi halde (varsayilan) asagidaki Apify yolu calisir.
 
+PANEL ENTEGRASYONU: app.py'ye dokunmadan, panelde secilen scraper/platform
+(secrets.local.json icindeki 'targeting') ve env buradan okunur. Secim yoksa
+davranis aynen eskisi gibi (apify + tiktok) kalir.
+
 Her creator'in GERCEK dili kendi metninden (bio+isim) tespit edilir; boylece
 yabancilara kendi dilinde mail gider. Coklu token, kalici gecmis, dedup.
 
@@ -285,6 +289,55 @@ def _start_run(actor: str, tokens: List[str], actor_input: dict):
     raise RuntimeError(f"Tum Apify token'lari basarisiz. Son hata -> {last_err}")
 
 
+# --- Panel entegrasyonu (app.py'ye dokunmadan) -----------------------------
+
+def _read_panel_secrets() -> dict:
+    """secrets.local.json'i okur (setup.py'nin yazdigi dosya). Bulamazsa {}.
+    SADECE OKUR, asla yazmaz. app.py ile ayni dosya cozumlemesi."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(os.environ.get("DATA_DIR", "."), "secrets.local.json"),
+        os.path.join(here, "secrets.local.json"),
+    ]
+    for p in candidates:
+        try:
+            if os.path.exists(p):
+                with open(p, "r", encoding="utf-8") as f:
+                    return json.load(f) or {}
+        except Exception:
+            continue
+    return {}
+
+
+def _as_list(v) -> List[str]:
+    if isinstance(v, list):
+        return [str(x).strip() for x in v if str(x).strip()]
+    return [x.strip() for x in str(v or "").replace("\n", ",").split(",") if x.strip()]
+
+
+def _apply_panel_fallbacks(cfg: dict) -> None:
+    """cfg'de scraper/platform/scrapecreators_keys yoksa panelden (secrets.local.json
+    -> targeting) ve env'den doldurur. HICBIRI yoksa dokunmaz (varsayilan apify+tiktok).
+    cfg yerinde guncellenir; cagiran tarafta zaten KOPYA kullaniliyor."""
+    sec = _read_panel_secrets()
+    tg = sec.get("targeting") or {}
+
+    if not (cfg.get("scraper") or cfg.get("provider")):
+        sc = tg.get("scraper") or os.environ.get("SCRAPER")
+        if sc:
+            cfg["scraper"] = sc
+
+    if not (cfg.get("platforms") or cfg.get("platform")):
+        pf = tg.get("platforms") or tg.get("platform") or os.environ.get("PLATFORMS")
+        if pf:
+            cfg["platforms"] = pf
+
+    if not (cfg.get("scrapecreators_keys") or cfg.get("scrapecreators_key")):
+        keys = sec.get("scrapecreators_keys") or os.environ.get("SCRAPECREATORS_KEYS")
+        if keys:
+            cfg["scrapecreators_keys"] = _as_list(keys)
+
+
 # --- Platform secimi / actor / input --------------------------------------
 
 def _resolve_platforms(cfg: dict) -> List[str]:
@@ -432,6 +485,11 @@ def _search_one_platform(platform: str, cfg: dict, tokens: List[str], hashtags: 
 
 
 def find_creators(cfg: dict) -> List[dict]:
+    # Cagiranin sozlugunu bozma: kopya uzerinde calis.
+    cfg = dict(cfg)
+    # Panelde secilen scraper/platform/anahtarlari (secrets.local.json + env) doldur.
+    _apply_panel_fallbacks(cfg)
+
     # --- Opt-in saglayici yonlendirmesi -----------------------------------
     # Varsayilan Apify. Sadece acikca secilirse ScrapeCreators'a devret.
     scraper = str(cfg.get("scraper") or cfg.get("provider") or "apify").strip().lower()
