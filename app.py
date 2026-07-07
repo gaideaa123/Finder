@@ -4,7 +4,10 @@ Email-only autopilot: TikTok'ta creator bulur -> email'ini bulur -> Groq ile
 hiper-ozel EMAIL uretir -> otomatik gonderir. DM GONDERMEZ. Ayni kisiyi tekrar
 getirmez (CRM dedup + arama sirasinda eleme). Server'da 7/24 calisabilir (env + AUTOSTART).
 
-Anahtar checker (Apify + Groq bakiye/kullanim) ayri sayfada: /checker
+Sayfalar:
+  /         panel
+  /checker  Apify + Groq bakiye/kullanim
+  /setup    kurulum GUI (anahtar gir + test + tek tusla deploy) - sadece local
 """
 
 import json
@@ -26,12 +29,13 @@ except Exception:
 app = Flask(__name__)
 crm.init_db()
 
-# Bakiye/kullanim checker (Apify + Groq) - ayri sayfa: /checker
-try:
-    from checker import checker_bp
-    app.register_blueprint(checker_bp)
-except Exception:
-    pass
+# Ek sayfalar: checker (bakiye) + setup (kurulum GUI)
+for _mod, _bp in (("checker", "checker_bp"), ("setup", "setup_bp")):
+    try:
+        _m = __import__(_mod)
+        app.register_blueprint(getattr(_m, _bp))
+    except Exception:
+        pass
 
 SITE_URL = os.environ.get("SITE_URL", "thecaptionai.com")
 
@@ -396,7 +400,6 @@ def bootstrap_from_env():
             STATE["accounts"] = _accounts_from(json.loads(raw))
         except Exception:
             pass
-    # env bos ise gizli local dosyadan doldur
     for p in ("secrets.local.json", os.path.join(os.environ.get("DATA_DIR", "."), "secrets.local.json")):
         if not os.path.exists(p):
             continue
@@ -414,12 +417,27 @@ def bootstrap_from_env():
         break
 
 def _env_autostart_config():
+    # Once env, yoksa secrets.local.json targeting
+    tg = {}
+    for p in ("secrets.local.json", os.path.join(os.environ.get("DATA_DIR", "."), "secrets.local.json")):
+        if os.path.exists(p):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    tg = (json.load(f) or {}).get("targeting") or {}
+            except Exception:
+                tg = {}
+            break
+    def pick(env, key, default):
+        v = os.environ.get(env)
+        if v not in (None, ""):
+            return v
+        return tg.get(key, default)
     return {
-        "hashtags": _split(os.environ.get("HASHTAGS", "")),
-        "countries": _split(os.environ.get("COUNTRIES", "")),
-        "min_followers": int(os.environ.get("MIN_FOLLOWERS", 3000)),
-        "max_followers": int(os.environ.get("MAX_FOLLOWERS", 80000)),
-        "target_count": int(os.environ.get("TARGET_COUNT", 60)),
+        "hashtags": _norm_list(pick("HASHTAGS", "hashtags", "")),
+        "countries": _norm_list(pick("COUNTRIES", "countries", "")),
+        "min_followers": int(pick("MIN_FOLLOWERS", "min_followers", 3000) or 3000),
+        "max_followers": int(pick("MAX_FOLLOWERS", "max_followers", 80000) or 80000),
+        "target_count": int(pick("TARGET_COUNT", "target_count", 60) or 60),
         "require_email": os.environ.get("REQUIRE_EMAIL", "1") == "1",
         "strict_country": os.environ.get("STRICT_COUNTRY", "1") == "1",
     }
@@ -435,5 +453,5 @@ if __name__ == "__main__":
     host = os.environ.get("HOST", "127.0.0.1")
     # debug/reloader varsayilan KAPALI (RCE riski + reloader auto dongusunu iki kez baslatir).
     debug = os.environ.get("FLASK_DEBUG") == "1"
-    print(f"\n CaptionAI Finder -> http://{host}:{port}  (checker: /checker)\n")
+    print(f"\n CaptionAI Finder -> http://{host}:{port}   (kurulum: /setup  ·  checker: /checker)\n")
     app.run(debug=debug, host=host, port=port)

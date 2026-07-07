@@ -4,15 +4,15 @@
 #   ./deploy.sh                 # varsayilan app adi: captionai-finder
 #   ./deploy.sh benim-app-adim  # kendi app adinla
 #
-# Ne yapar (sirayla, hepsi tek seferde):
-#   1) Fly CLI var mi + giris yaptin mi kontrol eder
+# Ipucu: Kolay yol -> `python app.py` ac, http://127.0.0.1:5000/setup 'a git,
+# anahtarlari yapistir ve oradan "Deploy Et" tusuna bas (bu script'i calistirir).
+#
+# Ne yapar (sirayla):
+#   1) Fly CLI var mi + giris yaptin mi kontrol eder (yoksa kurar)
 #   2) app'i olusturur (fly.toml korunur)
 #   3) kalici disk (volume) olusturur -> SQLite + seen_history burada durur
-#   4) secrets.local.json'daki anahtarlari Fly secret olarak yukler
+#   4) secrets.local.json'daki anahtarlari + hedeflemeyi Fly secret olarak yukler
 #   5) deploy eder -> AUTOSTART=1 sayesinde bot aninda 7/24 calismaya baslar
-#
-# Anahtarlar: secrets.local.json (repoda YOK, .gitignore'da). Bir kez doldur:
-#   cp secrets.local.example.json secrets.local.json  &&  duzenle
 # =============================================================================
 set -euo pipefail
 
@@ -60,22 +60,25 @@ else
   ok "Volume olusturuldu (DB burada, redeploy'da silinmez)"
 fi
 
-# --- 4) secrets.local.json -> fly secrets ---
+# --- 4) secrets.local.json -> fly secrets (anahtarlar + hedefleme) ---
 if [ -f "$SECRETS_FILE" ]; then
-  bold "Anahtarlar $SECRETS_FILE'dan Fly secret olarak yukleniyor..."
-  # Python ile guvenli parse edip 'KEY=VALUE' satirlari uret
+  bold "Anahtarlar + hedefleme $SECRETS_FILE'dan Fly secret olarak yukleniyor..."
   mapfile -t KV < <(python3 - "$SECRETS_FILE" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1], encoding="utf-8"))
 def csv(x):
     if isinstance(x, list): return ",".join(str(i).strip() for i in x if str(i).strip())
     return str(x or "").strip()
-ap = csv(d.get("apify_tokens"))
-gq = csv(d.get("groq_keys"))
-ea = d.get("email_accounts") or []
+ap = csv(d.get("apify_tokens")); gq = csv(d.get("groq_keys")); ea = d.get("email_accounts") or []
 if ap: print("APIFY_TOKENS=" + ap)
 if gq: print("GROQ_KEYS=" + gq)
 if ea: print("EMAIL_ACCOUNTS=" + json.dumps(ea, ensure_ascii=False))
+tg = d.get("targeting") or {}
+for k, env in (("countries","COUNTRIES"),("hashtags","HASHTAGS"),("min_followers","MIN_FOLLOWERS"),
+               ("max_followers","MAX_FOLLOWERS"),("target_count","TARGET_COUNT"),("daily_limit","DAILY_LIMIT")):
+    v = tg.get(k)
+    if v in (None, ""): continue
+    print(f"{env}=" + (csv(v) if isinstance(v, list) else str(v)))
 PY
 )
   if [ "${#KV[@]}" -gt 0 ]; then
@@ -85,8 +88,8 @@ PY
     warn "$SECRETS_FILE bos gorunuyor, secret yuklenmedi."
   fi
 else
-  warn "$SECRETS_FILE yok. Anahtarsiz deploy ediliyor."
-  warn "Sonra elle: fly secrets set --app $APP APIFY_TOKENS=... GROQ_KEYS=... EMAIL_ACCOUNTS='[...]'"
+  warn "$SECRETS_FILE yok. /setup sayfasindan doldurup kaydet, ya da:"
+  warn "  cp secrets.local.example.json secrets.local.json  (sonra duzenle)"
 fi
 
 # --- 5) deploy ---
@@ -98,6 +101,7 @@ ok "Bitti! 7/24 calisiyor."
 echo
 bold "Panel:   $URL"
 bold "Checker: $URL/checker"
+bold "Kurulum: $URL/setup (sadece local'de acilir)"
 bold "Saglik:  $URL/health"
 echo
 echo "Canli log: fly logs --app $APP"
