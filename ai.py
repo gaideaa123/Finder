@@ -2,12 +2,10 @@
 CaptionAI Finder - AI Beyni (Groq, Llama 3.3 70B)
 =================================================
 
-Ucretsiz + yuksek limit, OpenAI-uyumlu REST (SDK yok).
-Key: https://console.groq.com/keys . Coklu key: biri bitince sonrakine gecer.
-
 - Hiper-ozel, TEK DILDE, temiz, INSAN gibi email uretir (16 yasinda kurucu hikayesi).
-- Uretilen metni ikinci bir gecisle DUZELTIR (yazim/dilbilgisi hatasi birakmaz).
-- Nis/dil/ulkeye gore HASHTAG uretir.
+- SERT DIL KILIDI: kisi Turkce ise TURKCE, Ingilizce ise INGILIZCE. Karisik/bozuk
+  cikti REDDEDILIR -> temiz fallback kullanilir (asla bozuk mesaj gonderilmez).
+- Kisiye ozel email KONUSU (subject) uretir.
 """
 
 import json
@@ -20,8 +18,24 @@ import requests
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 DEFAULT_MODEL = "llama-3.3-70b-versatile"
 
-CJK_RE = re.compile(r"[\u3000-\u9fff\u3040-\u30ff\uac00-\ud7af]")  # Cince/Japonca/Korece
+CJK_RE = re.compile(r"[\u3000-\u9fff\u3040-\u30ff\uac00-\ud7af]")
 ARABIC_RE = re.compile(r"[\u0600-\u06ff]")
+LATIN_RE = re.compile(r"[a-zA-Z]")
+
+# Ciktida ASLA olmamasi gereken bozuk/kalip ifadeler (dil karismasi isareti).
+BAD_PHRASES = [
+    "baglantiim kuruldu", "ba\u011flant\u0131\u0131m kuruldu", "seninle baglanti",
+    "olarak seninle", "connected with you as", "i connected with",
+    "reaching out to you", "sana ulasmak istedim", "merhaba diyeyim",
+    "as someone who", "i wanted to reach",
+]
+
+# Turkce metinde bunlar cok gecerse -> aslinda Ingilizce yazmis demektir.
+EN_STOPWORDS = {"the", "and", "your", "you", "with", "for", "this", "that", "content",
+                "videos", "really", "love", "built", "tool", "would", "feedback", "reaching"}
+# Ingilizce metinde bunlar cok gecerse -> aslinda Turkce yazmis demektir.
+TR_STOPWORDS = {"ve", "bir", "icin", "i\u00e7in", "videolarini", "senin", "cok", "\u00e7ok",
+                "yaptim", "yapt\u0131m", "merhaba", "selam", "arac", "ara\u00e7", "gelistirdim"}
 
 class QuotaError(Exception):
     """Tum key'ler tukendi/kota bitti."""
@@ -31,18 +45,17 @@ _STYLE_SEEDS = [
     "icerigi hakkinda samimi, spesifik bir iltifatla ac",
     "nisindeki bir zorluga deginerek ac",
     "kisa merakli bir soruyla ac",
-    "sohbete devam eder gibi rahat ac",
 ]
 
 LANG_NAMES = {"tr": "Turkish", "en": "English", "es": "Spanish", "de": "German", "fr": "French", "ar": "Arabic"}
 
 LANG_RULES = {
-    "tr": "Yalnizca akici, dogru, dogal TURKCE yaz. Native bir Turk gibi. Dilbilgisi ve yazim KUSURSUZ olmali. Bozuk ifade YASAK: 'videolarini takiliyorum' (YANLIS), dogrusu 'videolarini takip ediyorum' ya da 'izliyorum'.",
-    "en": "Write ONLY in fluent, natural, grammatically flawless English.",
-    "es": "Write ONLY in fluent, natural, grammatically flawless Spanish.",
-    "de": "Write ONLY in fluent, natural, grammatically flawless German.",
-    "fr": "Write ONLY in fluent, natural, grammatically flawless French.",
-    "ar": "Write ONLY in fluent, natural, grammatically flawless Arabic.",
+    "tr": "SADECE akici, dogal, KUSURSUZ Turkce yaz. Native bir Turk gibi. Tek bir Ingilizce kelime bile kullanma. 'baglantiim kuruldu', 'seninle baglanti kurdum' gibi bozuk/cevrilmis ifadeler YASAK.",
+    "en": "Write ONLY in fluent, natural, flawless English. Not a single Turkish or foreign word.",
+    "es": "Write ONLY in fluent, natural, flawless Spanish.",
+    "de": "Write ONLY in fluent, natural, flawless German.",
+    "fr": "Write ONLY in fluent, natural, flawless French.",
+    "ar": "Write ONLY in fluent, natural, flawless Arabic.",
 }
 
 class AIBrain:
@@ -93,30 +106,35 @@ class AIBrain:
             return False
 
     def _is_clean(self, text: str, lang: str) -> bool:
-        """Dil karisimi/bozuk cikti kontrolu. Kotu ise False -> fallback kullanilir."""
+        """Bozuk/karisik dil kontrolu. Kotu ise False -> temiz fallback kullanilir."""
         if not text or len(text) < 15:
             return False
+        low = text.lower()
+        # Yabanci alfabe sizmasi
         if CJK_RE.search(text):
             return False
         if lang != "ar" and ARABIC_RE.search(text):
             return False
+        if lang == "ar" and LATIN_RE.search(text) and len(LATIN_RE.findall(text)) > 8:
+            return False
+        # Bilinen bozuk kaliplar
+        for bad in BAD_PHRASES:
+            if bad in low:
+                return False
+        # Dil karismasi: kelime bazli
+        words = set(re.findall(r"[a-z\u00e7\u011f\u0131\u00f6\u015f\u00fc]+", low))
+        if lang == "tr":
+            en_hits = len(words & EN_STOPWORDS)
+            if en_hits >= 3:  # Turkce isteyip Ingilizce yazmis
+                return False
+        if lang == "en":
+            tr_hits = len(words & TR_STOPWORDS)
+            if tr_hits >= 2:
+                return False
+            # Turkce'ye ozgu harfler Ingilizce metinde olmamali
+            if re.search(r"[\u011f\u0131\u015f\u00e7\u00f6\u00fc]", low) and len(re.findall(r"[\u011f\u0131\u015f]", low)) > 2:
+                return False
         return True
-
-    def _proofread(self, text: str, lang: str) -> str:
-        """Ikinci gecis: SADECE yazim/dilbilgisi hatalarini duzeltir, tonu/anlami korur.
-        Boylece gonderilen mailde kelime hatasi kalmaz."""
-        lang_name = LANG_NAMES.get(lang, "English")
-        system = ("You are a meticulous native " + lang_name + " proofreader. Fix ONLY spelling, "
-                  "grammar and word-choice errors. Keep the exact same meaning, tone, casual style, "
-                  "length and any emoji. Do NOT add greetings, explanations or quotes. Return ONLY the corrected text.")
-        try:
-            out = self._chat(system, text, temperature=0.1, max_tokens=320)
-            out = _tidy(out)
-            return out if self._is_clean(out, lang) else text
-        except QuotaError:
-            raise
-        except Exception:
-            return text
 
     def generate_dm(self, creator, lang, product_pitch, learned_tips="", link_url="", channel="email") -> str:
         name = creator.get("nickname") or creator.get("username", "")
@@ -127,66 +145,79 @@ class AIBrain:
 
         if channel == "email":
             link_rule = f"- Bu bir EMAIL. Linki bir kez, dogal sekilde ekle: {link_url}."
-            length_rule = "- 4-6 samimi, insan gibi cumle. Kisa bir kisisel HIKAYE anlat."
+            length_rule = "- 4-6 kisa, samimi, insan gibi cumle. Kisa bir kisisel hikaye anlat."
         else:
-            link_rule = "- Bu bir TikTok DM. ASLA link/URL koyma. 'link biomda' de. En fazla 3 kisa cumle."
+            link_rule = "- Bu bir TikTok DM. ASLA link koyma. 'link biomda' de. En fazla 3 kisa cumle."
             length_rule = "- En fazla 3 kisa cumle."
 
         system = (
-            "Sen 16 yasinda, tek basina kod yazan bir lise ogrencisi ve kurucususun. "
-            "Icerik ureticilerine birebir, sicak ve samimi mesajlar yaziyorsun. "
-            "Yazdigin mesaj gercek bir insanin elle yazdigi gibi olmali: dogal, spesifik, "
-            "asla sablon/AI gibi degil. Dilbilgisi ve yazim KUSURSUZ."
+            f"You write ONLY in {lang_name}. You are a 16-year-old solo founder writing a warm, "
+            f"personal outreach message to a TikTok creator. It must read like a real human hand-wrote it: "
+            f"natural, specific, never template-like, flawless grammar. {LANG_RULES.get(lang, LANG_RULES['en'])}"
         )
-        user = f"""Tek bir mesaj yaz. DIL: {lang_name} - {LANG_RULES.get(lang, LANG_RULES['en'])}
+        user = f"""Write ONE short message, entirely in {lang_name}.
 
-COK ONEMLI KURALLAR:
-- SADECE {lang_name} dilinde yaz. Baska hicbir dil/alfabe (Cince, Japonca, Arapca vb.) KULLANMA.
-- Ciktida sadece mesaj metni olsun. Aciklama, secenek, birden fazla versiyon YOK. TEK mesaj.
-- Yazim ve dilbilgisi KUSURSUZ, dogal olmali. Tek bir kelime hatasi bile olmasin.
+HARD RULES:
+- Output ONLY in {lang_name}. Even if the creator's bio below is in another language, YOU still write in {lang_name}.
+- Output ONLY the message text. No explanations, no options, no subject line, no quotes. ONE message.
+- Perfect, natural grammar. Zero awkward or translated-sounding phrases.
+- Do NOT copy random words from the bio (like brand/food names) into your sentences.
 
-KIM OLDUGUN (mesaja dogal serpistir, abartma):
-- 16 yasinda, tek basina bu araci gelistiren birisin. Kisa, gercekci, samimi bir hikaye anlat:
-  neden yaptigin (caption yazmak seni/arkadaslarini zorluyordu gibi), tek basina yaptigin.
-- Bombastik degil, mutevazi ve icten. "16 yasindayim" bilgisini dogal biçimde gecir.
+WHO YOU ARE (weave in naturally, humble, short story): a 16-year-old who built this tool alone because writing captions was hard for you and your friends. Mention being 16 naturally.
 
-KISI (ona ozel yaz):
-- ad: {name}
-- bio: {bio or '(bos)'}
-- takipci: {followers}
+PERSON (write specifically for them):
+- name: {name}
+- bio: {bio or '(empty)'}
+- followers: {followers}
 
-URUN (dogal deginin, satis yapma): {product_pitch}
+PRODUCT (mention naturally, don't hard-sell): {product_pitch}
 
-STIL: {seed}. Ona ozgu somut bir seye degin. Bir gercek fayda + samimi bir geri bildirim ricasi. En fazla 1 emoji, basa koyma.
-{length_rule}
-YASAK: 'unlock', 'game-changer', kurumsal ton, 'sana ulasmak istedim', 'merhaba diyeyim dedim', abartili ovgu.
+STYLE: {seed}. One real benefit + a warm ask for honest feedback. At most 1 emoji, not at the start.
+FORBIDDEN: 'unlock', 'game-changer', corporate tone, 'I wanted to reach out', overblown praise, any phrase like 'connected with you as ...'.
 {link_rule}
-{('- Daha cok cevap alan yaklasim: ' + learned_tips) if learned_tips else ''}
+{length_rule}
+{('- Approach that gets more replies: ' + learned_tips) if learned_tips else ''}
 
-SADECE mesaj metnini yaz."""
-        out = self._chat(system, user, temperature=0.7, max_tokens=380)
-        out = _tidy(out)
+Write ONLY the message text in {lang_name}."""
+        out = _tidy(self._chat(system, user, temperature=0.6, max_tokens=380))
         if not self._is_clean(out, lang):
-            raise RuntimeError("AI cikti dil kontrolunden gecemedi")  # app.py fallback'e duser
-        # Email icin ikinci gecis: yazim/dilbilgisi hatalarini temizle
-        if channel == "email":
-            out = self._proofread(out, lang)
+            # Bir kez daha, daha dusuk sicaklikla ve daha sert uyariyla dene
+            out = _tidy(self._chat(system, user + f"\n\nONEMLI: Kesinlikle SADECE {lang_name}. Onceki denemede dil karisti.",
+                                   temperature=0.3, max_tokens=380))
+            if not self._is_clean(out, lang):
+                raise RuntimeError("AI cikti dil kontrolunden gecemedi")  # app.py temiz fallback'e duser
         return out
 
+    def generate_subject(self, creator, lang="tr") -> str:
+        """Kisiye ozel, kisa, spam gibi olmayan email KONUSU."""
+        name = creator.get("nickname") or creator.get("username", "")
+        bio = creator.get("bio", "")
+        lang_name = LANG_NAMES.get(lang, "English")
+        system = f"You write ONLY in {lang_name}. Output a single short email subject, no quotes, no emoji."
+        user = (f"Write a short, personal, non-spammy email SUBJECT in {lang_name} (3-6 words) for reaching out to "
+                f"TikTok creator '{name}' (bio: {bio or 'n/a'}). Casual, human, references them or their content. "
+                f"Output ONLY the subject line.")
+        try:
+            s = _tidy(self._chat(system, user, temperature=0.7, max_tokens=30))
+            s = s.splitlines()[0].strip().strip('"\'') if s else ""
+            if s and self._is_clean(s + " ok ok", lang):  # kaba dil kontrolu
+                return s[:80]
+        except QuotaError:
+            raise
+        except Exception:
+            pass
+        return _fallback_subject(creator, lang)
+
     def generate_hashtags(self, lang="tr", countries=None, niche_hint="", count=12) -> List[str]:
-        """Nis/dil/ulkeye gore, caption araci icin IDEAL hedef hashtag'ler uretir.
-        (Cok icerik ureten ama caption'i zayif olabilecek yaraticilar.)"""
         lang_name = LANG_NAMES.get(lang, "English")
         loc = ", ".join(countries) if countries else lang_name
-        system = ("You are a TikTok growth expert. You output ONLY a JSON array of hashtag strings, "
+        system = ("You are a TikTok growth expert. Output ONLY a JSON array of hashtag strings, "
                   "no '#', lowercase, no spaces, no explanation.")
-        user = (
-            f"Give {count} TikTok hashtags in {lang_name} (market: {loc}) to find CONTENT CREATORS "
-            f"who post a lot but likely struggle with writing captions (ideal customers for an AI caption tool). "
-            f"Prefer niches like food, daily vlog, fashion/GRWM, skincare, fitness, travel, books, small business/sellers. "
-            + (f"Focus hint: {niche_hint}. " if niche_hint else "")
-            + 'Return ONLY a JSON array, e.g. ["yemektarifi","gunlukvlog"].'
-        )
+        user = (f"Give {count} TikTok hashtags in {lang_name} (market: {loc}) to find CONTENT CREATORS "
+                f"who post a lot but likely struggle writing captions (ideal customers for an AI caption tool). "
+                f"Prefer food, daily vlog, fashion/GRWM, skincare, fitness, travel, books, small business/sellers. "
+                + (f"Focus: {niche_hint}. " if niche_hint else "")
+                + 'Return ONLY a JSON array like ["yemektarifi","gunlukvlog"].')
         try:
             raw = self._chat(system, user, temperature=0.6, max_tokens=250)
         except QuotaError:
@@ -195,24 +226,13 @@ SADECE mesaj metnini yaz."""
             return []
         arr = _safe_json(raw, [])
         if not isinstance(arr, list):
-            # bazen virgullu metin donebilir
             arr = [t.strip() for t in re.split(r"[,\n]", raw) if t.strip()]
         out, seen = [], set()
         for h in arr:
             h = str(h).strip().lstrip("#").replace(" ", "").lower()
             if h and h not in seen:
-                seen.add(h)
-                out.append(h)
+                seen.add(h); out.append(h)
         return out[:count]
-
-    def analyze_fit(self, creator) -> dict:
-        name = creator.get("nickname") or creator.get("username", "")
-        bio = creator.get("bio", "")
-        followers = creator.get("followers", 0)
-        user = ("Assess if this TikTok creator is a good target for a caption-writing tool. Weak/short captions = better fit. "
-                f"CREATOR: name={name}; followers={followers}; bio=\"{bio or '(empty)'}\". "
-                'Return STRICT JSON only: {"fit_score":0-100,"reason":"one short sentence","angle":"one short sentence"}')
-        return _safe_json(self._chat("Return only strict JSON.", user, 0.3, 150), {"fit_score": 50, "reason": "", "angle": ""})
 
     def analyze_reply(self, dm_sent, reply_text, lang="tr") -> dict:
         user = (f"Creator replied. MY DM: {dm_sent}\nREPLY: {reply_text}\n"
@@ -223,7 +243,7 @@ SADECE mesaj metnini yaz."""
         if not samples:
             return ""
         compact = [{"m": (s.get("message", "")[:140]), "replied": bool(s.get("replied"))} for s in samples[:30]]
-        user = ("DMs and replies (JSON): " + json.dumps(compact, ensure_ascii=False)
+        user = ("Emails and replies (JSON): " + json.dumps(compact, ensure_ascii=False)
                 + ". 2-3 one-line tips (no markdown) on what gets MORE replies. Output only tips.")
         try:
             return self._chat("Concise growth analyst.", user, 0.5, 180)
@@ -232,8 +252,20 @@ SADECE mesaj metnini yaz."""
         except Exception:
             return ""
 
+def _fallback_subject(creator, lang="tr") -> str:
+    name = creator.get("nickname") or creator.get("username", "")
+    t(lang) if False else None
+    subs = {
+        "tr": f"{name}, icerigin cok iyi",
+        "en": f"{name}, love your content",
+        "es": f"{name}, me encanta tu contenido",
+        "de": f"{name}, dein content ist top",
+        "fr": f"{name}, j'adore ton contenu",
+        "ar": f"{name}",
+    }
+    return subs.get(lang, subs["en"]).strip().strip(",").strip() or "hey"
+
 def _tidy(text: str) -> str:
-    """Fazla bosluk/satir, tirnak sarmasi temizligi."""
     t = (text or "").strip()
     if len(t) >= 2 and t[0] in "\"'" and t[-1] in "\"'":
         t = t[1:-1].strip()
@@ -249,7 +281,6 @@ def _safe_json(raw, default):
         s = s.strip("`")
         if s.lower().startswith("json"):
             s = s[4:]
-    # dizi mi obje mi
     for op, cl in (("[", "]"), ("{", "}")):
         a, b = s.find(op), s.rfind(cl)
         if a != -1 and b != -1 and b > a:
