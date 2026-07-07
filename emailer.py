@@ -6,6 +6,9 @@ accounts: [{email, password(app pw), from_name}, ...]
 Her hesap gunde daily_limit (30) kadar atar; dolunca sonraki hesaba gecer.
 Hepsi dolunca durur. Ayni email adresine ikinci kez atmaz.
 
+Govde: kisinin CRM'de kayitli hazir mesaji varsa onu kullanir (Groq'u tekrar
+cagirmaz -> hizli + az kota). Yoksa build_body ile uretir.
+
 Gmail icin uygulama sifresi gerekir (normal sifre degil):
   myaccount.google.com/apppasswords
 """
@@ -33,16 +36,13 @@ _state = {
 }
 _lock = threading.Lock()
 
-
 def get_status() -> dict:
     with _lock:
         return dict(_state)
 
-
 def stop_campaign() -> None:
     with _lock:
         _state["stopped"] = True
-
 
 def _smtp_login(provider: str, user: str, pw: str):
     host, port = SMTP_PRESETS.get(provider, SMTP_PRESETS["gmail"])
@@ -51,7 +51,6 @@ def _smtp_login(provider: str, user: str, pw: str):
     server.login(user, pw)
     return server
 
-
 def _send(server, from_addr, from_name, to_addr, subject, body) -> None:
     msg = MIMEMultipart()
     msg["From"] = f"{from_name} <{from_addr}>" if from_name else from_addr
@@ -59,7 +58,6 @@ def _send(server, from_addr, from_name, to_addr, subject, body) -> None:
     msg["Subject"] = subject
     msg.attach(MIMEText(body, "plain", "utf-8"))
     server.sendmail(from_addr, [to_addr], msg.as_string())
-
 
 def _run(cfg: dict) -> None:
     provider = cfg.get("provider", "gmail")
@@ -130,7 +128,8 @@ def _run(cfg: dict) -> None:
                         break
                 c = queue[qi]
                 qi += 1
-                body = build_body(c)
+                # Hazir govde varsa onu kullan (Groq'u tekrar cagirma); yoksa uret.
+                body = (c.get("message") or "").strip() or build_body(c)
                 try:
                     _send(server, user, from_name, c["email"], subject, body)
                     crm.set_message(c["username"], body)
@@ -155,7 +154,6 @@ def _run(cfg: dict) -> None:
 
     with _lock:
         _state["running"] = False
-
 
 def start_email_campaign(cfg: dict) -> dict:
     with _lock:
