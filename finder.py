@@ -9,7 +9,8 @@ Actor'ler:
 
 Coklu scraper: Apify (varsayilan) VEYA ScrapeCreators.
   cfg["scraper"] == "scrapecreators" -> scrapers.py devreye girer.
-  Aksi halde (varsayilan) asagidaki Apify yolu calisir.
+  Aksi halde (varsayilan) Apify yolu calisir; Apify tukenirse (kota/token)
+  ScrapeCreators anahtari varsa OTOMATIK ona gecer.
 
 PANEL ENTEGRASYONU: app.py'ye dokunmadan, panelde secilen scraper/platform
 (secrets.local.json icindeki 'targeting') ve env buradan okunur. Secim yoksa
@@ -338,6 +339,29 @@ def _apply_panel_fallbacks(cfg: dict) -> None:
             cfg["scrapecreators_keys"] = _as_list(keys)
 
 
+def _has_scrapecreators_keys(cfg: dict) -> bool:
+    """cfg / secrets.local.json / env icinde kullanilabilir bir ScrapeCreators key var mi?"""
+    if cfg.get("scrapecreators_keys") or cfg.get("scrapecreators_key"):
+        return True
+    sec = _read_panel_secrets()
+    if sec.get("scrapecreators_keys"):
+        return True
+    if os.environ.get("SCRAPECREATORS_KEYS"):
+        return True
+    return False
+
+
+_EXHAUSTED_HINTS = [
+    "401", "402", "403", "quota", "payment", "insufficient",
+    "unauthorized", "token", "tukendi", "basarisiz",
+]
+
+
+def _looks_exhausted(err: str) -> bool:
+    low = (err or "").lower()
+    return any(k in low for k in _EXHAUSTED_HINTS)
+
+
 # --- Platform secimi / actor / input --------------------------------------
 
 def _resolve_platforms(cfg: dict) -> List[str]:
@@ -484,19 +508,8 @@ def _search_one_platform(platform: str, cfg: dict, tokens: List[str], hashtags: 
     return matched
 
 
-def find_creators(cfg: dict) -> List[dict]:
-    # Cagiranin sozlugunu bozma: kopya uzerinde calis.
-    cfg = dict(cfg)
-    # Panelde secilen scraper/platform/anahtarlari (secrets.local.json + env) doldur.
-    _apply_panel_fallbacks(cfg)
-
-    # --- Opt-in saglayici yonlendirmesi -----------------------------------
-    # Varsayilan Apify. Sadece acikca secilirse ScrapeCreators'a devret.
-    scraper = str(cfg.get("scraper") or cfg.get("provider") or "apify").strip().lower()
-    if scraper in ("scrapecreators", "scrape_creators", "sc"):
-        from scrapers import find_creators_scrapecreators  # lazy: dairesel import yok
-        return find_creators_scrapecreators(cfg)
-
+def _find_creators_apify(cfg: dict) -> List[dict]:
+    """Apify uzerinden creator bulur (varsayilan yol)."""
     tokens = cfg.get("apify_tokens") or ([cfg.get("apify_token")] if cfg.get("apify_token") else [])
     tokens = [t for t in tokens if t and "YAPISTIR" not in t]
     if not tokens:
@@ -562,6 +575,30 @@ def find_creators(cfg: dict) -> List[dict]:
     if skip_seen and rows:
         add_to_history([r["username"] for r in rows])
     return rows
+
+
+def find_creators(cfg: dict) -> List[dict]:
+    # Cagiranin sozlugunu bozma: kopya uzerinde calis.
+    cfg = dict(cfg)
+    # Panelde secilen scraper/platform/anahtarlari (secrets.local.json + env) doldur.
+    _apply_panel_fallbacks(cfg)
+
+    scraper = str(cfg.get("scraper") or cfg.get("provider") or "apify").strip().lower()
+
+    # 1) Acikca ScrapeCreators secildiyse dogrudan ona git.
+    if scraper in ("scrapecreators", "scrape_creators", "sc"):
+        from scrapers import find_creators_scrapecreators  # lazy: dairesel import yok
+        return find_creators_scrapecreators(cfg)
+
+    # 2) Varsayilan Apify. Tukenirse (kota/token) ve ScrapeCreators anahtari varsa
+    #    OTOMATIK ona gec.
+    try:
+        return _find_creators_apify(cfg)
+    except Exception as e:  # noqa: BLE001
+        if _looks_exhausted(str(e)) and _has_scrapecreators_keys(cfg):
+            from scrapers import find_creators_scrapecreators  # lazy
+            return find_creators_scrapecreators(cfg)
+        raise
 
 
 def save_csv(rows: List[dict], out_csv: str) -> None:
