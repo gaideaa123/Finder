@@ -1,17 +1,37 @@
 # CaptionAI Finder · Email Autopilot 🧠
 
-TikTok'ta içerik üreticilerini bulur, **email'lerini** çıkarır, **Groq (Llama 3.3 70B)**
+TikTok **ve Instagram**'da içerik üreticilerini bulur, **email'lerini** çıkarır, **Groq (Llama 3.3 70B)**
 ile her kişiye özel, **hatasız** ve **16 yaşında kurucu hikayesiyle** email yazar ve
 **otomatik gönderir**. Aynı kişiyi asla iki kez getirmez. PC'ni açık tutmana gerek
 yok: **Oracle Cloud Always Free** VM'de **7/24, tamamen ücretsiz** çalışır.
 
-> DM GÖNDERMEZ. Sadece email. (TikTok DM otomasyonu hesabı banlatır; email kanalı güvenli.)
+> DM GÖNDERMEZ. Sadece email. (TikTok/Instagram DM otomasyonu hesabı banlatır; email kanalı güvenli.)
+
+## Platformlar (TikTok + Instagram)
+
+Hangi platform(lar)da aranılacağı seçilebilir:
+
+| Ayar | Değer | Açıklama |
+| --- | --- | --- |
+| `PLATFORMS` (env) / `platform` (config) | `tiktok` | Sadece TikTok (varsayılan) |
+| | `instagram` | Sadece Instagram |
+| | `tiktok,instagram` veya `both` | İkisi birden (sonuçlar birleştirilir, followers'a göre sıralanıp kırpılır) |
+
+Her platform kendi Apify actor'ünü kullanır:
+
+- **TikTok:** `paxiq~tiktok-influencer-scraper` (varsayılan)
+- **Instagram:** `apify~instagram-scraper` (varsayılan, `APIFY_ACTOR_INSTAGRAM` / `apify_actor_instagram` ile değiştirilebilir)
+
+> ℹ️ **Instagram notu:** Kullandığın IG actor'ünün profil **bio + email** çıkardığından emin ol. Alan
+> adları (`biography`, `followersCount`, `businessEmail`, `externalUrl`, `ownerUsername`...) otomatik
+> eşlenir; farklı bir actor kullanırsan `apify_input_instagram` ile actor input'unu tamamen override edebilirsin.
+> Coklu platformda biri hata verirse diğeri çalışmaya devam eder.
 
 ## Mimari
 
 | Dosya | Görev |
 | --- | --- |
-| `finder.py` | Apify ile hashtag/ülke bazlı creator bulma (çoklu token, arama sırasında dedup) |
+| `finder.py` | Apify ile hashtag/ülke bazlı creator bulma — **TikTok + Instagram**, çoklu token, arama sırasında dedup |
 | `ai.py` | Groq / Llama 3.3 70B: hatasız hikaye email, hashtag üretimi, yanıt analizi |
 | `crm.py` | SQLite: kuyruk, durum, email dedup, tekrar bulmama |
 | `emailer.py` | Çok hesaplı otomatik email (insan hızında, günlük limit) |
@@ -60,6 +80,8 @@ Oluşan `secrets.local.json`'ı VM'e kopyalayıp 7/24 çalıştırırsın (bkz. 
 | --- | --- |
 | `APIFY_TOKENS` / `GROQ_KEYS` | virgülle ayrılır (secret) |
 | `EMAIL_ACCOUNTS` | JSON: `[{email, password, from_name}]` |
+| `PLATFORMS` | `tiktok` · `instagram` · `tiktok,instagram` (varsayılan `tiktok`) |
+| `APIFY_ACTOR_TIKTOK` / `APIFY_ACTOR_INSTAGRAM` | Platform başına Apify actor override |
 | `COUNTRIES` / `HASHTAGS` | Hedefleme |
 | `PER_COMBO_TARGET` | Her hashtag kombosu için taranacak kişi (varsayılan 60) |
 | `AUTOSTART` | `1` = açılışta otomasyonu başlat |
@@ -71,4 +93,4 @@ Oluşan `secrets.local.json`'ı VM'e kopyalayıp 7/24 çalıştırırsın (bkz. 
 
 - Anahtarlar `secrets.local.json` (gitignore) ya da env'de; repoya asla gitmez.
 - Gmail'de mutlaka **uygulama şifresi** kullan.
-- Topladığın verileri sadece kişiye özel outreach için kullan (KVKK/GDPR/CAN-SPAM).
+- Topladığın verileri sadece kişiye özel outreach için kullan (KVKK/GDPR/CAN-SPAM). Unsubscribe/opt-out'a uy.

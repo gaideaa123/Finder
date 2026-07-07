@@ -1,19 +1,23 @@
 {
   "apify_token": "BURAYA_APIFY_API_TOKENINI_YAPISTIR",
+  "_platform": "Hangi platform(lar): 'tiktok' | 'instagram' | 'both'. Coklu icin liste de olur: [\"tiktok\", \"instagram\"]",
+  "platform": "tiktok",
   "apify_actor": "paxiq~tiktok-influencer-scraper",
-  "_not": "Ulkeler ve hashtag'ler artik GUI'den secilir (6 dil). Bu dosya CLI/varsayilan icindir.",
+  "apify_actor_tiktok": "paxiq~tiktok-influencer-scraper",
+  "apify_actor_instagram": "apify~instagram-scraper",
+  "_not": "Ulkeler ve hashtag'ler artik GUI'den secilir (6 dil). Bu dosya CLI/varsayilan icindir. Instagram actor'unun bio+email cikardigindan emin ol; gerekirse apify_input_instagram ile input override et.",
   "hashtags": [
     "yemektarifi",
     "evyemekleri",
-    "günlükvlog",
+    "g\u00fcnl\u00fckvlog",
     "kombin",
     "makyaj",
     "spormotivasyon",
     "gymtok",
     "gezilecekyerler",
-    "bilgipaylaşımı"
+    "bilgipayla\u015f\u0131m\u0131"
   ],
-  "countries": ["Türkiye"],
+  "countries": ["T\u00fcrkiye"],
   "min_followers": 3000,
   "max_followers": 80000,
   "target_count": 100,

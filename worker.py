@@ -1,15 +1,20 @@
 """CaptionAI Finder - Headless email-only AUTOPILOT (DM YOK).
 
 Surekli calisir:
-  1) TikTok'ta YENI icerik ureticisi bul (Apify)
-  2) email'ini cikar
-  3) Groq (Llama 3.3 70B) ile hiper-ozel email yaz
-  4) gonder (coklu hesap, gunluk limit, insani gecikme)
-  5) bekle, tekrar
+ 1) TikTok ve/veya Instagram'da YENI icerik ureticisi bul (Apify)
+ 2) email'ini cikar
+ 3) Groq (Llama 3.3 70B) ile hiper-ozel email yaz
+ 4) gonder (coklu hesap, gunluk limit, insani gecikme)
+ 5) bekle, tekrar
 
 DM ATILMAZ. Tum ayarlar environment variable'dan gelir.
-Ucretsiz server (Fly.io) icin tasarlandi; kalici DB sayesinde
+Ucretsiz server (Fly.io / Oracle) icin tasarlandi; kalici DB sayesinde
 restart'ta ayni kisileri tekrar getirmez.
+
+Hangi platform(lar)da aranacagi PLATFORMS env ile secilir:
+  PLATFORMS=tiktok            (varsayilan)
+  PLATFORMS=instagram
+  PLATFORMS=tiktok,instagram  (ikisi birden)
 """
 
 import json
@@ -29,7 +34,7 @@ except Exception:
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s  %(levelname)s  %(message)s",
+    format="%(asctime)s %(levelname)s %(message)s",
     stream=sys.stdout,
 )
 log = logging.getLogger("autopilot")
@@ -46,6 +51,9 @@ CFG = {
     "groq_keys": _split(os.environ.get("GROQ_KEYS")),
     "hashtags": _split(os.environ.get("HASHTAGS")),
     "countries": _split(os.environ.get("COUNTRIES")),
+    "platforms": _split(os.environ.get("PLATFORMS")) or ["tiktok"],
+    "apify_actor_tiktok": os.environ.get("APIFY_ACTOR_TIKTOK", "paxiq~tiktok-influencer-scraper"),
+    "apify_actor_instagram": os.environ.get("APIFY_ACTOR_INSTAGRAM", "apify~instagram-scraper"),
     "min_followers": int(os.environ.get("MIN_FOLLOWERS", "3000")),
     "max_followers": int(os.environ.get("MAX_FOLLOWERS", "80000")),
     "target_per_round": int(os.environ.get("TARGET_PER_ROUND", "40")),
@@ -75,7 +83,7 @@ FALLBACK = {
     "es": "hola {name}, sigo tu contenido y tu estilo me encanta. escribir captions me costaba, con 16 anos hice una herramienta: escribes el tema y salen 4 captions en segundos. me encantaria tu opinion: {site}",
     "de": "hey {name}, verfolge deinen content, dein stil ist top. captions schreiben hat mich aufgehalten, mit 16 hab ich ein tool gebaut: thema eingeben, 4 fertige captions in sekunden. feedback ware toll: {site}",
     "fr": "hey {name}, je suis ton contenu, ton style est top. ecrire les legendes me ralentissait, a 16 ans j'ai fait un outil: tu tapes le sujet, 4 legendes en secondes. ton avis m'interesse: {site}",
-    "ar": "مرحبا {name}، أتابع محتواك وأسلوبك رائع. كتابة الكابشن كانت تبطئني، وعمري 16 صنعت أداة: تكتب الموضوع وتعطيك 4 كابشنات بثواني. يهمني رأيك: {site}",
+    "ar": "\u0645\u0631\u062d\u0628\u0627 {name}\u060c \u0623\u062a\u0627\u0628\u0639 \u0645\u062d\u062a\u0648\u0627\u0643 \u0648\u0623\u0633\u0644\u0648\u0628\u0643 \u0631\u0627\u0626\u0639. \u0643\u062a\u0627\u0628\u0629 \u0627\u0644\u0643\u0627\u0628\u0634\u0646 \u0643\u0627\u0646\u062a \u062a\u0628\u0637\u0626\u0646\u064a\u060c \u0648\u0639\u0645\u0631\u064a 16 \u0635\u0646\u0639\u062a \u0623\u062f\u0627\u0629: \u062a\u0643\u062a\u0628 \u0627\u0644\u0645\u0648\u0636\u0648\u0639 \u0648\u062a\u0639\u0637\u064a\u0643 4 \u0643\u0627\u0628\u0634\u0646\u0627\u062a \u0628\u062b\u0648\u0627\u0646\u064a. \u064a\u0647\u0645\u0646\u064a \u0631\u0623\u064a\u0643: {site}",
 }
 
 _BRAIN = None
@@ -130,15 +138,18 @@ def _search(tags):
     if not tokens:
         raise RuntimeError("APIFY_TOKENS bos")
     base = {
-        "apify_actor": "paxiq~tiktok-influencer-scraper",
+        "platforms": CFG["platforms"],
+        "apify_actor": CFG["apify_actor_tiktok"],
+        "apify_actor_tiktok": CFG["apify_actor_tiktok"],
+        "apify_actor_instagram": CFG["apify_actor_instagram"],
         "hashtags": tags,
         "countries": CFG["countries"],
         "min_followers": CFG["min_followers"],
         "max_followers": CFG["max_followers"],
         "target_count": CFG["target_per_round"],
-        "require_email": True,          # sadece email'i olanlar (email-only)
+        "require_email": True,  # sadece email'i olanlar (email-only)
         "strict_country": True,
-        "skip_seen": False,             # dedup CRM'de
+        "skip_seen": False,  # dedup CRM'de
         "exclude_usernames": list(crm.known_usernames()),  # AYNI KISILERI GETIRME
     }
     last = ""
@@ -177,8 +188,8 @@ def _send_batch():
 
 def run_forever():
     crm.init_db()
-    log.info("Autopilot basladi | hashtag=%s ulke=%s hesap=%s",
-             CFG["hashtags"], CFG["countries"], len(ACCOUNTS))
+    log.info("Autopilot basladi | platform=%s hashtag=%s ulke=%s hesap=%s",
+             CFG["platforms"], CFG["hashtags"], CFG["countries"], len(ACCOUNTS))
     if not CFG["apify_tokens"]:
         log.error("APIFY_TOKENS yok, cikiliyor"); return
     if not CFG["hashtags"]:

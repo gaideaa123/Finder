@@ -2,9 +2,16 @@
 CaptionAI - Icerik Uretici Bulucu (Apify tabanli)
 =================================================
 
-Actor: paxiq/tiktok-influencer-scraper
+Coklu platform: TikTok + Instagram.
+Actor'ler:
+  - TikTok:    paxiq/tiktok-influencer-scraper
+  - Instagram: apify/instagram-scraper   (override edilebilir)
+
 Her creator'in GERCEK dili kendi metninden (bio+isim) tespit edilir; boylece
 yabancilara kendi dilinde mail gider. Coklu token, kalici gecmis, dedup.
+
+cfg["platform"] / cfg["platforms"] ile hangi platformlarda aranacagi secilir:
+  "tiktok" (varsayilan) | "instagram" | "both" | ["tiktok", "instagram"]
 """
 
 import json
@@ -17,6 +24,17 @@ import requests
 
 APIFY_BASE = "https://api.apify.com/v2"
 HISTORY_FILE = os.path.join(os.environ.get("DATA_DIR", "."), "seen_history.json")
+
+# --- Platform tanimlari -----------------------------------------------------
+PLATFORM_ACTORS = {
+    "tiktok": "paxiq~tiktok-influencer-scraper",
+    "instagram": "apify~instagram-scraper",
+}
+
+PROFILE_URL = {
+    "tiktok": "https://www.tiktok.com/@{u}",
+    "instagram": "https://www.instagram.com/{u}/",
+}
 
 SUPPORTED_LANGS = ["tr", "en", "es", "de", "fr", "ar"]
 
@@ -71,12 +89,14 @@ LANG_WORDS = {
            "recette", "cuisine", "voyage", "mode", "beaute", "quotidien", "ma", "mon"},
 }
 
+
 def load_history() -> Set[str]:
     try:
         with open(HISTORY_FILE, "r", encoding="utf-8") as f:
             return set(json.load(f).get("seen", []))
     except Exception:
         return set()
+
 
 def add_to_history(usernames: List[str]) -> None:
     seen = load_history()
@@ -87,6 +107,7 @@ def add_to_history(usernames: List[str]) -> None:
     except Exception:
         pass
 
+
 def country_to_iso(value: str) -> Optional[str]:
     if not value:
         return None
@@ -95,16 +116,19 @@ def country_to_iso(value: str) -> Optional[str]:
         return v.upper()
     return COUNTRY_NAME_TO_ISO.get(v)
 
+
 def lang_for_country(iso: Optional[str]) -> str:
     if not iso:
         return "en"
     return COUNTRY_LANG.get(iso.upper(), "en")
+
 
 def _norm(text: str) -> str:
     """Turkce/aksanli harfleri sadelestir ki kelime eslesmesi calissin."""
     tbl = str.maketrans("\u0131\u015f\u011f\u00fc\u00f6\u00e7\u0130\u00e2\u00e4\u00e0\u00e9\u00e8\u00ea\u00ee\u00ef\u00f4\u00fb\u00f1",
                         "isguociaaaeeeiioun")
     return text.lower().translate(tbl)
+
 
 def detect_lang_from_text(text: str) -> Optional[str]:
     """Creator'in kendi metninden GERCEK dilini tahmin eder. Bulamazsa None."""
@@ -129,6 +153,7 @@ def detect_lang_from_text(text: str) -> Optional[str]:
             best_lang, best_hits = lang, hits
     return best_lang if best_hits >= 1 else None
 
+
 def _first(d: dict, keys: List[str], default=None):
     for k in keys:
         if "." in k:
@@ -146,31 +171,57 @@ def _first(d: dict, keys: List[str], default=None):
             return d[k]
     return default
 
-def normalize_item(item: dict) -> Optional[dict]:
-    username = _first(item, ["handle", "username", "uniqueId", "userName", "authorMeta.name", "author.uniqueId"])
+
+def normalize_item(item: dict, platform: str = "tiktok") -> Optional[dict]:
+    """Ham Apify kaydini ortak semaya cevirir. TikTok + Instagram alan adlari desteklenir."""
+    username = _first(item, [
+        "handle", "username", "uniqueId", "userName", "ownerUsername",
+        "authorMeta.name", "author.uniqueId", "owner.username",
+    ])
     if not username:
         return None
     username = str(username).lstrip("@")
 
-    nickname = _first(item, ["display_name", "first_name", "nickname", "name", "fullName", "authorMeta.nickName"], default=username)
-    followers = _first(item, ["followers", "followerCount", "fans", "authorMeta.fans", "authorStats.followerCount"], default=0)
+    nickname = _first(item, [
+        "display_name", "first_name", "nickname", "name", "fullName", "full_name",
+        "ownerFullName", "authorMeta.nickName", "owner.full_name",
+    ], default=username)
+
+    followers = _first(item, [
+        "followers", "followerCount", "followersCount", "fans",
+        "authorMeta.fans", "authorStats.followerCount", "edge_followed_by.count",
+    ], default=0)
     try:
         followers = int(followers)
     except (TypeError, ValueError):
         followers = 0
 
-    bio = _first(item, ["bio", "signature", "authorMeta.signature", "description"], default="")
-    bio_link = _first(item, ["bio_link", "bioLink", "bioLink.link"], default="")
+    bio = _first(item, [
+        "bio", "signature", "biography", "authorMeta.signature", "description",
+    ], default="")
+    bio_link = _first(item, [
+        "bio_link", "bioLink", "bioLink.link", "externalUrl", "external_url",
+    ], default="")
 
-    email = _first(item, ["email", "authorMeta.email"], default="")
+    email = _first(item, [
+        "email", "businessEmail", "public_email", "publicEmail",
+        "business_email", "authorMeta.email",
+    ], default="")
     if not email and bio:
         m = EMAIL_RE.search(bio)
         if m:
             email = m.group(0)
 
-    profile = _first(item, ["profile_url", "profileUrl"], default=f"https://www.tiktok.com/@{username}")
+    # Profil URL: once explicit alanlar, yoksa platforma gore uret.
+    profile = _first(item, ["profile_url", "profileUrl"], default="")
+    if not profile and platform == "instagram":
+        profile = _first(item, ["url", "inputUrl", "input_url"], default="")
+    if not profile:
+        profile = PROFILE_URL.get(platform, PROFILE_URL["tiktok"]).format(u=username)
 
-    country_raw = _first(item, ["country_hint", "country", "region", "countryCode", "authorMeta.region"], default="")
+    country_raw = _first(item, [
+        "country_hint", "country", "region", "countryCode", "authorMeta.region",
+    ], default="")
     iso = country_to_iso(country_raw)
 
     detected = detect_lang_from_text(f"{nickname} {bio}")
@@ -187,6 +238,7 @@ def normalize_item(item: dict) -> Optional[dict]:
         lang = "en"
 
     return {
+        "platform": platform,
         "username": username,
         "nickname": nickname or username,
         "followers": followers,
@@ -199,6 +251,7 @@ def normalize_item(item: dict) -> Optional[dict]:
         "profile": profile,
     }
 
+
 def _fetch_dataset(dataset_id: str, token: str, limit: int) -> List[dict]:
     ds_url = f"{APIFY_BASE}/datasets/{dataset_id}/items"
     resp = requests.get(ds_url, params={"token": token, "limit": limit}, timeout=60)
@@ -206,6 +259,7 @@ def _fetch_dataset(dataset_id: str, token: str, limit: int) -> List[dict]:
         return []
     data = resp.json()
     return data if isinstance(data, list) else []
+
 
 def _start_run(actor: str, tokens: List[str], actor_input: dict):
     run_url = f"{APIFY_BASE}/acts/{actor}/runs"
@@ -226,37 +280,57 @@ def _start_run(actor: str, tokens: List[str], actor_input: dict):
         break
     raise RuntimeError(f"Tum Apify token'lari basarisiz. Son hata -> {last_err}")
 
-def find_creators(cfg: dict) -> List[dict]:
-    tokens = cfg.get("apify_tokens") or ([cfg.get("apify_token")] if cfg.get("apify_token") else [])
-    tokens = [t for t in tokens if t and "YAPISTIR" not in t]
-    if not tokens:
-        raise RuntimeError("Gecerli bir Apify API token yok.")
 
-    actor = cfg.get("apify_actor", "paxiq~tiktok-influencer-scraper")
-    hashtags = [h.lstrip("#") for h in cfg.get("hashtags", []) if h.strip()]
-    if not hashtags:
-        raise RuntimeError("En az bir hashtag gerekli.")
+# --- Platform secimi / actor / input --------------------------------------
 
-    min_f = int(cfg.get("min_followers", 3000))
-    max_f = int(cfg.get("max_followers", 80000))
-    target = int(cfg.get("target_count", 100))
-    require_email = bool(cfg.get("require_email", False))
-    strict_country = bool(cfg.get("strict_country", True))
-    skip_seen = bool(cfg.get("skip_seen", True))
+def _resolve_platforms(cfg: dict) -> List[str]:
+    raw = cfg.get("platforms") or cfg.get("platform") or "tiktok"
+    if isinstance(raw, str):
+        raw = [raw]
+    out: List[str] = []
+    for p in raw:
+        p = str(p).strip().lower()
+        if p in ("both", "all", "hepsi", "ikisi", "tiktok,instagram", "instagram,tiktok"):
+            out = ["tiktok", "instagram"]
+            break
+        if p in PLATFORM_ACTORS and p not in out:
+            out.append(p)
+    return out or ["tiktok"]
 
-    exclude_users = {str(u).lower() for u in (cfg.get("exclude_usernames") or set())}
-    exclude_emails = {str(e).strip().lower() for e in (cfg.get("exclude_emails") or set()) if e}
 
-    wanted = set()
-    for c in cfg.get("countries", []) or []:
-        iso = country_to_iso(c)
-        if iso:
-            wanted.add(iso)
-    wanted_langs = {lang_for_country(iso) for iso in wanted}
+def _actor_for(platform: str, cfg: dict) -> str:
+    # Platforma ozel override -> genel apify_actor (sadece tiktok icin) -> varsayilan
+    specific = cfg.get(f"apify_actor_{platform}")
+    if specific:
+        return specific
+    if platform == "tiktok" and cfg.get("apify_actor"):
+        return cfg["apify_actor"]
+    return PLATFORM_ACTORS[platform]
 
-    history = load_history() if skip_seen else set()
-    max_results = max(int(target * 12) + len(exclude_users), target + 400)
-    actor_input = cfg.get("apify_input") or {
+
+def _build_actor_input(platform: str, cfg: dict, hashtags: List[str], wanted: Set[str],
+                       min_f: int, max_f: int, max_results: int, require_email: bool) -> dict:
+    # Tam override (platforma ozel) -> aynen kullan.
+    override = cfg.get(f"apify_input_{platform}")
+    if override is None and platform == "tiktok":
+        override = cfg.get("apify_input")
+    if override:
+        return dict(override)
+
+    if platform == "instagram":
+        return {
+            "hashtags": hashtags,
+            "search": hashtags[0] if hashtags else "",
+            "searchType": "hashtag",
+            "resultsType": "details",
+            "resultsLimit": max_results,
+            "directUrls": [f"https://www.instagram.com/explore/tags/{h}/" for h in hashtags],
+            "extract_emails": True,
+            "addParentData": False,
+        }
+
+    # TikTok varsayilan input
+    inp = {
         "hashtags": hashtags,
         "min_followers": min_f,
         "max_followers": max_f,
@@ -265,18 +339,28 @@ def find_creators(cfg: dict) -> List[dict]:
         "follow_bio_links": True,
     }
     if require_email:
-        actor_input["require_email"] = True
-    if wanted and "country_hint" not in actor_input:
-        actor_input["country_hint"] = sorted(wanted)[0]
+        inp["require_email"] = True
+    if wanted:
+        inp["country_hint"] = sorted(wanted)[0]
+    return inp
 
-    poll_interval = float(cfg.get("poll_interval", 3))
-    overall_timeout = float(cfg.get("overall_timeout", 360))
+
+def _search_one_platform(platform: str, cfg: dict, tokens: List[str], hashtags: List[str],
+                         *, target: int, min_f: int, max_f: int, require_email: bool,
+                         strict_country: bool, skip_seen: bool, history: Set[str],
+                         exclude_users: Set[str], exclude_emails: Set[str],
+                         wanted: Set[str], wanted_langs: Set[str],
+                         poll_interval: float, overall_timeout: float,
+                         max_results: int) -> Dict[str, dict]:
+    """Tek bir platform icin Apify actor'unu calistirir ve eslesenleri toplar."""
+    actor = _actor_for(platform, cfg)
+    actor_input = _build_actor_input(platform, cfg, hashtags, wanted, min_f, max_f, max_results, require_email)
 
     run, token = _start_run(actor, tokens, actor_input)
     run_id = run.get("id")
     dataset_id = run.get("defaultDatasetId")
     if not run_id or not dataset_id:
-        raise RuntimeError("Apify run baslatilamadi (id yok).")
+        raise RuntimeError(f"[{platform}] Apify run baslatilamadi (id yok).")
 
     matched: Dict[str, dict] = {}
     start = time.time()
@@ -294,7 +378,7 @@ def find_creators(cfg: dict) -> List[dict]:
 
     def collect() -> None:
         for raw in _fetch_dataset(dataset_id, token, max_results):
-            rec = normalize_item(raw)
+            rec = normalize_item(raw, platform)
             if not rec or rec["username"] in matched:
                 continue
             uname = rec["username"].lower()
@@ -340,14 +424,80 @@ def find_creators(cfg: dict) -> List[dict]:
             collect()
             break
 
-    rows = sorted(matched.values(), key=lambda r: r["followers"], reverse=True)[:target]
+    return matched
+
+
+def find_creators(cfg: dict) -> List[dict]:
+    tokens = cfg.get("apify_tokens") or ([cfg.get("apify_token")] if cfg.get("apify_token") else [])
+    tokens = [t for t in tokens if t and "YAPISTIR" not in t]
+    if not tokens:
+        raise RuntimeError("Gecerli bir Apify API token yok.")
+
+    platforms = _resolve_platforms(cfg)
+
+    hashtags = [h.lstrip("#") for h in cfg.get("hashtags", []) if h.strip()]
+    if not hashtags:
+        raise RuntimeError("En az bir hashtag gerekli.")
+
+    min_f = int(cfg.get("min_followers", 3000))
+    max_f = int(cfg.get("max_followers", 80000))
+    target = int(cfg.get("target_count", 100))
+    require_email = bool(cfg.get("require_email", False))
+    strict_country = bool(cfg.get("strict_country", True))
+    skip_seen = bool(cfg.get("skip_seen", True))
+
+    exclude_users = {str(u).lower() for u in (cfg.get("exclude_usernames") or set())}
+    exclude_emails = {str(e).strip().lower() for e in (cfg.get("exclude_emails") or set()) if e}
+
+    wanted = set()
+    for c in cfg.get("countries", []) or []:
+        iso = country_to_iso(c)
+        if iso:
+            wanted.add(iso)
+    wanted_langs = {lang_for_country(iso) for iso in wanted}
+
+    history = load_history() if skip_seen else set()
+    max_results = max(int(target * 12) + len(exclude_users), target + 400)
+
+    poll_interval = float(cfg.get("poll_interval", 3))
+    overall_timeout = float(cfg.get("overall_timeout", 360))
+
+    # Her platform kendi hedefi kadar toplar; sonda birlestirip followers'a gore siralanip kirpilir.
+    all_matched: Dict[str, dict] = {}
+    errors: List[str] = []
+    for platform in platforms:
+        try:
+            m = _search_one_platform(
+                platform, cfg, tokens, hashtags,
+                target=target, min_f=min_f, max_f=max_f, require_email=require_email,
+                strict_country=strict_country, skip_seen=skip_seen, history=history,
+                exclude_users=exclude_users, exclude_emails=exclude_emails,
+                wanted=wanted, wanted_langs=wanted_langs,
+                poll_interval=poll_interval, overall_timeout=overall_timeout,
+                max_results=max_results,
+            )
+        except Exception as e:  # noqa: BLE001
+            # Coklu platformda birinin patlamasi digerini durdurmasin.
+            errors.append(f"[{platform}] {e}")
+            if len(platforms) == 1:
+                raise
+            continue
+        # Ayni handle farkli platformlarda cakismasin diye anahtar platform:username.
+        for uname, rec in m.items():
+            all_matched[f"{platform}:{uname.lower()}"] = rec
+
+    if not all_matched and errors:
+        raise RuntimeError("; ".join(errors))
+
+    rows = sorted(all_matched.values(), key=lambda r: r["followers"], reverse=True)[:target]
     if skip_seen and rows:
         add_to_history([r["username"] for r in rows])
     return rows
 
+
 def save_csv(rows: List[dict], out_csv: str) -> None:
     import csv
-    fields = ["username", "nickname", "followers", "country", "lang", "email", "bio_link", "bio", "profile"]
+    fields = ["platform", "username", "nickname", "followers", "country", "lang", "email", "bio_link", "bio", "profile"]
     with open(out_csv, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fields)
         writer.writeheader()
