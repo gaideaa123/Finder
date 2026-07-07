@@ -1,7 +1,7 @@
 """CaptionAI Finder - Headless email-only AUTOPILOT (DM YOK).
 
 Surekli calisir:
- 1) TikTok ve/veya Instagram'da YENI icerik ureticisi bul (Apify)
+ 1) TikTok ve/veya Instagram'da YENI icerik ureticisi bul (Apify VEYA ScrapeCreators)
  2) email'ini cikar
  3) Groq (Llama 3.3 70B) ile hiper-ozel email yaz
  4) gonder (coklu hesap, gunluk limit, insani gecikme)
@@ -15,6 +15,10 @@ Hangi platform(lar)da aranacagi PLATFORMS env ile secilir:
   PLATFORMS=tiktok            (varsayilan)
   PLATFORMS=instagram
   PLATFORMS=tiktok,instagram  (ikisi birden)
+
+Hangi scraper kullanilacagi SCRAPER env ile secilir:
+  SCRAPER=apify           (varsayilan)
+  SCRAPER=scrapecreators  (SCRAPECREATORS_KEYS gerekli)
 """
 
 import json
@@ -52,6 +56,8 @@ CFG = {
     "hashtags": _split(os.environ.get("HASHTAGS")),
     "countries": _split(os.environ.get("COUNTRIES")),
     "platforms": _split(os.environ.get("PLATFORMS")) or ["tiktok"],
+    "scraper": (os.environ.get("SCRAPER", "apify") or "apify").strip().lower(),
+    "scrapecreators_keys": _split(os.environ.get("SCRAPECREATORS_KEYS")),
     "apify_actor_tiktok": os.environ.get("APIFY_ACTOR_TIKTOK", "paxiq~tiktok-influencer-scraper"),
     "apify_actor_instagram": os.environ.get("APIFY_ACTOR_INSTAGRAM", "apify~instagram-scraper"),
     "min_followers": int(os.environ.get("MIN_FOLLOWERS", "3000")),
@@ -134,10 +140,16 @@ def _rotate(tags, k, i):
 
 
 def _search(tags):
-    tokens = CFG["apify_tokens"]
-    if not tokens:
-        raise RuntimeError("APIFY_TOKENS bos")
+    scraper = CFG["scraper"]
+    if scraper in ("scrapecreators", "scrape_creators", "sc"):
+        if not CFG["scrapecreators_keys"]:
+            raise RuntimeError("SCRAPECREATORS_KEYS bos")
+    else:
+        if not CFG["apify_tokens"]:
+            raise RuntimeError("APIFY_TOKENS bos")
     base = {
+        "scraper": scraper,
+        "scrapecreators_keys": CFG["scrapecreators_keys"],
         "platforms": CFG["platforms"],
         "apify_actor": CFG["apify_actor_tiktok"],
         "apify_actor_tiktok": CFG["apify_actor_tiktok"],
@@ -152,8 +164,11 @@ def _search(tags):
         "skip_seen": False,  # dedup CRM'de
         "exclude_usernames": list(crm.known_usernames()),  # AYNI KISILERI GETIRME
     }
+    # ScrapeCreators tek key listesi kullanir; Apify coklu token'i iceride dener.
+    if scraper in ("scrapecreators", "scrape_creators", "sc"):
+        return find_creators(base)
     last = ""
-    for tok in tokens:
+    for tok in CFG["apify_tokens"]:
         try:
             return find_creators(dict(base, apify_token=tok))
         except Exception as e:  # noqa: BLE001
@@ -188,9 +203,12 @@ def _send_batch():
 
 def run_forever():
     crm.init_db()
-    log.info("Autopilot basladi | platform=%s hashtag=%s ulke=%s hesap=%s",
-             CFG["platforms"], CFG["hashtags"], CFG["countries"], len(ACCOUNTS))
-    if not CFG["apify_tokens"]:
+    log.info("Autopilot basladi | scraper=%s platform=%s hashtag=%s ulke=%s hesap=%s",
+             CFG["scraper"], CFG["platforms"], CFG["hashtags"], CFG["countries"], len(ACCOUNTS))
+    is_sc = CFG["scraper"] in ("scrapecreators", "scrape_creators", "sc")
+    if is_sc and not CFG["scrapecreators_keys"]:
+        log.error("SCRAPECREATORS_KEYS yok, cikiliyor"); return
+    if not is_sc and not CFG["apify_tokens"]:
         log.error("APIFY_TOKENS yok, cikiliyor"); return
     if not CFG["hashtags"]:
         log.error("HASHTAGS yok, cikiliyor"); return

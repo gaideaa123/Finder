@@ -7,6 +7,10 @@ Actor'ler:
   - TikTok:    paxiq/tiktok-influencer-scraper
   - Instagram: apify/instagram-scraper   (override edilebilir)
 
+Coklu scraper: Apify (varsayilan) VEYA ScrapeCreators.
+  cfg["scraper"] == "scrapecreators" -> scrapers.py devreye girer.
+  Aksi halde (varsayilan) asagidaki Apify yolu calisir.
+
 Her creator'in GERCEK dili kendi metninden (bio+isim) tespit edilir; boylece
 yabancilara kendi dilinde mail gider. Coklu token, kalici gecmis, dedup.
 
@@ -428,6 +432,13 @@ def _search_one_platform(platform: str, cfg: dict, tokens: List[str], hashtags: 
 
 
 def find_creators(cfg: dict) -> List[dict]:
+    # --- Opt-in saglayici yonlendirmesi -----------------------------------
+    # Varsayilan Apify. Sadece acikca secilirse ScrapeCreators'a devret.
+    scraper = str(cfg.get("scraper") or cfg.get("provider") or "apify").strip().lower()
+    if scraper in ("scrapecreators", "scrape_creators", "sc"):
+        from scrapers import find_creators_scrapecreators  # lazy: dairesel import yok
+        return find_creators_scrapecreators(cfg)
+
     tokens = cfg.get("apify_tokens") or ([cfg.get("apify_token")] if cfg.get("apify_token") else [])
     tokens = [t for t in tokens if t and "YAPISTIR" not in t]
     if not tokens:

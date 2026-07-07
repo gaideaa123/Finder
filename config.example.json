@@ -1,5 +1,8 @@
 {
+  "_scraper": "Hangi scraper: 'apify' (varsayilan) | 'scrapecreators'. ScrapeCreators icin scrapecreators_keys doldur.",
+  "scraper": "apify",
   "apify_token": "BURAYA_APIFY_API_TOKENINI_YAPISTIR",
+  "scrapecreators_keys": ["BURAYA_SCRAPECREATORS_KEY"],
   "_platform": "Hangi platform(lar): 'tiktok' | 'instagram' | 'both'. Coklu icin liste de olur: [\"tiktok\", \"instagram\"]",
   "platform": "tiktok",
   "apify_actor": "paxiq~tiktok-influencer-scraper",
