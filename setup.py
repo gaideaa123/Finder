@@ -1,11 +1,6 @@
-"""Setup GUI - anahtarlari yapistir, test et, hashtag uret, BASLAT. Dosya elleme yok.
+"""Setup API - anahtar + email hesabi + SES + hedefleme kaydeder/okur.
 
-GUVENLIK:
-- Kendi bilgisayarinda (localhost) her zaman acilir.
-- Sunucuda: sadece ALLOW_SETUP=1 ise acilir. SETUP_PASSWORD verilirse sifre sorar
-  (header 'X-Setup-Password' ya da ?pw=...). install-oracle.sh bunlari otomatik ayarlar.
-
-Acilis: http://<host>:<port>/setup
+GUVENLIK: localhost her zaman; sunucuda ALLOW_SETUP=1 (+ opsiyonel SETUP_PASSWORD).
 """
 
 import json
@@ -37,11 +32,6 @@ def _authed() -> bool:
 
 @setup_bp.before_request
 def _guard():
-    # Sayfanin kendisi (HTML) her zaman acilir; sifre kontrolu API'lerde.
-    if request.endpoint == "setup.setup_page":
-        if _is_local() or os.environ.get("ALLOW_SETUP") == "1":
-            return None
-        return jsonify({"ok": False, "error": "Setup kapali (ALLOW_SETUP=1 gerekli)."}), 403
     if not _authed():
         return jsonify({"ok": False, "error": "auth", "need_pw": True}), 403
     return None
@@ -66,21 +56,21 @@ def _read() -> dict:
             return {}
     return {}
 
-@setup_bp.route("/setup")
-def setup_page():
-    return render_template("setup.html")
-
 @setup_bp.route("/api/setup/load")
 def setup_load():
     d = _read()
+    ses = d.get("ses") or {}
     return jsonify({
         "ok": True,
         "has_file": os.path.exists(SECRETS_FILE),
-        "path": SECRETS_FILE,
         "apify_masked": [_mask(x) for x in (d.get("apify_tokens") or [])],
         "groq_masked": [_mask(x) for x in (d.get("groq_keys") or [])],
         "accounts": [{"email": a.get("email", ""), "from_name": a.get("from_name", "")}
                      for a in (d.get("email_accounts") or [])],
+        "sender": d.get("sender") or "gmail",
+        "ses": {"smtp_host": ses.get("smtp_host", ""), "smtp_port": ses.get("smtp_port", 587),
+                "smtp_user": ses.get("smtp_user", ""), "smtp_pass_set": bool(ses.get("smtp_pass")),
+                "from_email": ses.get("from_email", ""), "from_name": ses.get("from_name", "")},
         "targeting": d.get("targeting") or {},
     })
 
@@ -99,10 +89,24 @@ def setup_save():
         if e and p:
             accs.append({"email": e, "password": p, "from_name": (a.get("from_name") or "").strip()})
 
+    # SES: bos sifre gelirse eskisini koru
+    ses_in = data.get("ses") or {}
+    ses_old = existing.get("ses") or {}
+    ses = {
+        "smtp_host": (ses_in.get("smtp_host") or ses_old.get("smtp_host") or "").strip(),
+        "smtp_port": int(ses_in.get("smtp_port") or ses_old.get("smtp_port") or 587),
+        "smtp_user": (ses_in.get("smtp_user") or ses_old.get("smtp_user") or "").strip(),
+        "smtp_pass": (ses_in.get("smtp_pass") or ses_old.get("smtp_pass") or "").strip(),
+        "from_email": (ses_in.get("from_email") or ses_old.get("from_email") or "").strip(),
+        "from_name": (ses_in.get("from_name") or ses_old.get("from_name") or "").strip(),
+    }
+
     out = {
         "apify_tokens": apify or existing.get("apify_tokens") or [],
         "groq_keys": groq or existing.get("groq_keys") or [],
         "email_accounts": accs or existing.get("email_accounts") or [],
+        "ses": ses,
+        "sender": data.get("sender") or existing.get("sender") or "gmail",
         "targeting": data.get("targeting") or existing.get("targeting") or {},
     }
     d = os.path.dirname(SECRETS_FILE)
@@ -113,9 +117,9 @@ def setup_save():
             pass
     with open(SECRETS_FILE, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
-    return jsonify({"ok": True, "apify": len(out["apify_tokens"]),
-                    "groq": len(out["groq_keys"]), "accounts": len(out["email_accounts"]),
-                    "path": os.path.abspath(SECRETS_FILE)})
+    return jsonify({"ok": True, "apify": len(out["apify_tokens"]), "groq": len(out["groq_keys"]),
+                    "accounts": len(out["email_accounts"]), "sender": out["sender"],
+                    "ses": bool(out["ses"]["from_email"])})
 
 def _saved_groq_keys() -> list:
     return _read().get("groq_keys") or []
@@ -129,9 +133,8 @@ def setup_hashtags():
         from ai import AIBrain
         brain = AIBrain(keys)
         data = request.get_json(force=True) or {}
-        tags = brain.generate_hashtags(
-            lang=data.get("lang", "tr"), countries=data.get("countries") or [],
-            niche_hint=data.get("niche", ""), count=int(data.get("count", 12)))
+        tags = brain.generate_hashtags(lang=data.get("lang", "tr"), countries=data.get("countries") or [],
+                                       niche_hint=data.get("niche", ""), count=int(data.get("count", 12)))
         return jsonify({"ok": True, "hashtags": tags})
     except Exception as e:  # noqa: BLE001
         return jsonify({"ok": False, "error": str(e)[:150]}), 500
@@ -143,8 +146,6 @@ def setup_check():
     except Exception as e:  # noqa: BLE001
         return jsonify({"ok": False, "error": f"checker yuklenemedi: {e}"}), 500
     d = _read()
-    apify = d.get("apify_tokens") or []
-    groq = d.get("groq_keys") or []
     return jsonify({"ok": True,
-                    "apify": [apify_check(t) for t in apify],
-                    "groq": [groq_check(k) for k in groq]})
+                    "apify": [apify_check(t) for t in (d.get("apify_tokens") or [])],
+                    "groq": [groq_check(k) for k in (d.get("groq_keys") or [])]})
