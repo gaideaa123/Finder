@@ -7,8 +7,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# SQLite kalici volume'de dursun (restart'ta dedup hafizasi silinmesin)
-ENV DB_FILE=/data/finder_crm.db
+# Server varsayilanlari (fly.toml / env ile ezilebilir)
+ENV HOST=0.0.0.0 \
+    PORT=8080 \
+    DATA_DIR=/data \
+    AUTOSTART=1 \
+    REQUIRE_EMAIL=1
 
-# Headless email-only autopilot (DM YOK). Loglar stdout'a.
-CMD ["python", "-u", "worker.py"]
+EXPOSE 8080
+
+# Tek process: arka plandaki auto-loop'un tek kopya calismasi icin onemli.
+CMD ["python", "app.py"]

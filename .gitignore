@@ -1,9 +1,10 @@
 # Secrets & local data
 config.json
+.env
 finder_crm.db
 seen_history.json
 creators.csv
-.env
+data/
 
 # Python
 __pycache__/
@@ -12,6 +13,9 @@ __pycache__/
 .venv/
 venv/
 env/
+
+# Fly
+fly.toml.bak
 
 # OS / editor
 .DS_Store
