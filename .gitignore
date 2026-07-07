@@ -15,8 +15,7 @@ __pycache__/
 venv/
 env/
 
-# Vercel / Fly
-.vercel
+# Fly
 fly.toml.bak
 
 # OS / editor

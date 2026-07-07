@@ -1,6 +1,7 @@
-# Anahtar Checker (Apify + Groq) & Vercel
+# Anahtar Checker (Apify + Groq)
 
 Apify ve Groq anahtarlarinin ne kadar kullanildigini / kaldigini gosterir.
+Ana uygulamanin bir parcasi: deploy edince `…/checker` adresinde canli.
 
 ## Ne gosterir
 
@@ -18,37 +19,15 @@ Apify ve Groq anahtarlarinin ne kadar kullanildigini / kaldigini gosterir.
    ```bash
    cp secrets.local.example.json secrets.local.json   # sonra doldur
    ```
-3. **env / secret** (server): `APIFY_TOKENS`, `GROQ_KEYS` (virgulle ayir).
+3. **env / Fly secret** (server): `APIFY_TOKENS`, `GROQ_KEYS` (virgulle ayir). `./deploy.sh` bunu secrets.local.json'dan otomatik yapar.
 
-> Anahtarlar **asla repoya yazilmaz.** `secrets.local.json` .gitignore'da. Server'da
-> Fly secret ya da Vercel env kullan.
+> Anahtarlar **asla repoya yazilmaz.** `secrets.local.json` .gitignore'da.
 
 ## Calistirma
 
-- **Web:** panelde/deploy'da `…/checker` adresini ac. Sayfa acilinca server'da yuklu
+- **Web:** deploy'da `…/checker` adresini ac. Sayfa acilinca server'da yuklu
   anahtarlari otomatik tarar, ayrica elle yapistirma da var.
 - **CLI:** `python checker.py`  (env ya da secrets.local.json'dan okur, tabloyu basar).
 
-## Vercel'e kurulum (sadece checker)
-
-```bash
-npm i -g vercel
-vercel            # ilk kurulum (repoyu bagla)
-vercel env add GROQ_KEYS       # gsk_xxx,gsk_yyy
-vercel env add APIFY_TOKENS    # apify_xxx,apify_yyy
-vercel --prod
-```
-
-Acilan URL `/checker`'a yonlenir. `vercel.json` + `api/index.py` hazir.
-
-### Neden 7/24 bot Vercel'de DEGIL?
-
-Vercel serverless: kalici process yok, disk read-only, fonksiyon saniyeler sonra
-oluyor. 7/24 arka planda donen + SQLite tutan email otomasyonu orada **calismaz.**
-Bu yuzden:
-
-- **Checker dashboard → Vercel** (istek geldikce calisir, ideal).
-- **7/24 email botu → Fly.io** (always-on + kalici disk; bkz. README).
-
-Gercekten tek yerde 7/24 istiyorsan hepsini Fly.io'da tut; checker zaten orada
-`/checker` adresinde de calisir.
+Checker ana Flask app'ine bir blueprint olarak bagli; ayri servis/host gerekmez.
+Fly.io'da 7/24 calisan uygulamayla ayni yerde durur.
