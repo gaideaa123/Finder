@@ -1,8 +1,8 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="tr">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CaptionAI Finder</title>
 <style>
   :root { --bg:#0b0b12; --panel:#14141f; --panel-2:#1b1b2a; --border:#2a2a3c;
@@ -21,7 +21,6 @@
   .card { background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:20px; margin-bottom:16px; }
   .card h2 { margin:0 0 14px; font-size:14px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
   label { display:block; font-size:13px; color:var(--muted); margin:12px 0 6px; }
-  label:first-child { margin-top:0; }
   input, textarea, select { width:100%; background:var(--panel-2); border:1px solid var(--border); color:var(--text); border-radius:10px; padding:10px 12px; font-size:14px; font-family:inherit; }
   input:focus, textarea:focus { outline:none; border-color:var(--accent); }
   .row { display:flex; gap:10px; flex-wrap:wrap; }
@@ -33,229 +32,229 @@
   .btn:disabled { opacity:.5; cursor:not-allowed; transform:none; }
   .btn.secondary { background:var(--panel-2); border:1px solid var(--border); }
   .btn.small { padding:7px 11px; font-size:13px; }
+  .btn.danger { background:var(--red); }
   .btn.full { width:100%; }
-  .copied { background:var(--green) !important; }
   .countries { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
   .cbtn { cursor:pointer; text-align:center; padding:9px 6px; border-radius:10px; font-size:13px; font-weight:700; background:var(--panel-2); border:1px solid var(--border); color:var(--muted); }
   .cbtn.on { background:linear-gradient(135deg,var(--accent),var(--accent-2)); color:white; border-color:transparent; }
-  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
-  .chip { font-size:12px; padding:5px 10px; border-radius:999px; cursor:pointer; background:var(--panel-2); border:1px solid var(--border); color:var(--muted); }
-  .chip:hover { border-color:var(--accent); color:var(--text); }
   .status { margin:12px 0; font-size:13px; color:var(--muted); min-height:18px; }
-  .status.err { color:var(--accent-2); }
-  .creators { display:grid; grid-template-columns:1fr; gap:10px; }
-  .creator { position:relative; background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:14px 40px 14px 14px; display:flex; flex-direction:column; gap:8px; }
-  .del { position:absolute; top:12px; right:12px; width:24px; height:24px; border-radius:7px; border:1px solid var(--border); background:var(--panel-2); color:var(--muted); cursor:pointer; }
-  .del:hover { background:var(--red); color:white; }
-  .crow { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-  .cname { font-weight:800; font-size:15px; }
-  .csub { color:var(--muted); font-size:12px; }
-  .badge { font-size:11px; background:var(--panel-2); border:1px solid var(--border); border-radius:999px; padding:3px 8px; color:var(--muted); }
-  .badge.lang { color:var(--accent); text-transform:uppercase; }
-  .badge.mail { color:var(--green); cursor:pointer; }
-  .dm { background:var(--panel-2); border:1px solid var(--border); border-radius:9px; padding:9px; font-size:13px; line-height:1.5; white-space:pre-wrap; }
-  .acts { display:flex; gap:6px; flex-wrap:wrap; }
+  .status.err { color:var(--accent-2); } .status.ok { color:var(--green); }
   .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:12px; }
   .kpi { background:var(--panel-2); border:1px solid var(--border); border-radius:12px; padding:14px; text-align:center; }
-  .kpi .n { font-size:26px; font-weight:800; background:linear-gradient(135deg,var(--accent),var(--accent-2)); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .kpi .n { font-size:26px; font-weight:800; color:var(--accent); }
   .kpi .l { font-size:12px; color:var(--muted); margin-top:4px; }
   .acclist { display:flex; flex-direction:column; gap:8px; margin-top:10px; }
   .accitem { display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--panel-2); border:1px solid var(--border); border-radius:10px; padding:8px 12px; font-size:13px; }
   .accitem .x { cursor:pointer; color:var(--muted); }
-  .accitem .x:hover { color:var(--red); }
   table { width:100%; border-collapse:collapse; font-size:13px; }
   th, td { text-align:left; padding:8px; border-bottom:1px solid var(--border); vertical-align:top; }
   th { color:var(--muted); position:sticky; top:0; background:var(--panel); }
   .tbl-wrap { max-height:60vh; overflow:auto; border:1px solid var(--border); border-radius:12px; }
   .modal { position:fixed; inset:0; background:rgba(0,0,0,.7); display:none; place-items:center; z-index:50; }
   .modal.on { display:grid; }
-  .modal .box { background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:24px; max-width:480px; width:92%; max-height:90vh; overflow-y:auto; }
-  .spinner { width:15px; height:15px; border:2px solid rgba(255,255,255,.3); border-top-color:white; border-radius:50%; animation:spin .7s linear infinite; }
-  @keyframes spin { to { transform:rotate(360deg); } }
+  .modal .box { background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:24px; max-width:520px; width:92%; max-height:90vh; overflow-y:auto; }
   .hint { font-size:12px; color:var(--muted); margin-top:6px; line-height:1.5; }
   .hint a { color:var(--accent); }
   .hidden { display:none; }
+  .st { font-size:11px; padding:2px 8px; border-radius:999px; border:1px solid var(--border); color:var(--muted); }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
     <div class="logo"><span class="dot">🧠</span> CaptionAI Finder</div>
-    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <span class="keydot" id="kd-apify">Apify: 0</span>
       <span class="keydot" id="kd-ai">AI: yok</span>
       <span class="keydot" id="kd-acc">Hesap: 0</span>
-      <button class="btn secondary small" onclick="openKeys()">🔑 Anahtarlar</button>
+      <button class="btn small" onclick="openKeys()">🔑 Anahtarlar</button>
     </div>
   </header>
 
   <div class="tabs">
-    <div class="tab active" data-t="search" onclick="tab('search')">🔎 Ara</div>
-    <div class="tab" data-t="queue" onclick="tab('queue')">💬 DM Kuyruğu</div>
+    <div class="tab active" data-t="search" onclick="tab('search')">🔎 Ara & Başlat</div>
     <div class="tab" data-t="email" onclick="tab('email')">✉️ Email</div>
     <div class="tab" data-t="db" onclick="tab('db')">🗄️ Database</div>
     <div class="tab" data-t="stats" onclick="tab('stats')">📊 Analiz</div>
   </div>
 
+  <!-- ARA -->
   <div id="pane-search">
     <div class="card">
       <h2>Hedefleme</h2>
       <label>Ülke / Dil</label>
       <div class="countries" id="countryBtns"></div>
-      <label>Hashtag'ler (virgülle ayır)</label>
+      <label style="margin-top:14px">Hashtag'ler (virgülle ayır)</label>
       <textarea id="hashtags" rows="2"></textarea>
-      <div class="chips" id="hashtagChips"></div>
-      <div class="row">
-        <div><label>Min takipçi</label><input id="min_followers" type="number" value="3000" /></div>
-        <div><label>Max takipçi</label><input id="max_followers" type="number" value="80000" /></div>
-        <div><label>Hedef</label><input id="target" type="number" value="60" /></div>
+      <div class="row" style="margin-top:8px">
+        <input id="niche" placeholder="niş ipucu (ops.): küçük işletme, yemek..." style="flex:2">
+        <button class="btn secondary small" id="htBtn" onclick="genHashtags()">🧠 AI ile üret</button>
       </div>
-      <label class="check"><input type="checkbox" id="strict_country" checked /> Sadece seçili ülke/dil</label>
-      <label class="check"><input type="checkbox" id="require_email" /> Sadece email'i olanlar</label>
-      <div class="row" style="margin-top:14px">
-        <div><button class="btn full" id="autoBtn" onclick="runAuto()">🤖 Auto-bul + Email</button></div>
-        <div style="flex:0"><button class="btn secondary" id="findBtn" onclick="runFind()">Sadece Bul</button></div>
-        <div style="flex:0"><button class="btn secondary" onclick="stopAuto()">⏹ Auto Durdur</button></div>
+      <div id="htStatus" class="status"></div>
+      <div class="row" style="margin-top:6px">
+        <div><label>Min takipçi</label><input id="min_followers" value="3000"></div>
+        <div><label>Max takipçi</label><input id="max_followers" value="80000"></div>
+        <div><label>Kombo başı hedef</label><input id="target" value="60"></div>
       </div>
-      <div class="status" id="searchStatus"></div>
-      <div class="status" id="autoStatus"></div>
+      <label class="check"><input type="checkbox" id="strict_country" checked> Sadece seçili ülke/dil</label>
+      <label class="check"><input type="checkbox" id="require_email" checked> Sadece email'i olanlar</label>
+      <div class="row" style="margin-top:12px">
+        <button class="btn" id="autoBtn" onclick="runAuto()">🤖 Başlat (bul + email, 7/24)</button>
+        <button class="btn secondary" id="findBtn" onclick="runFind()">Sadece Bul</button>
+        <button class="btn secondary" onclick="stopAuto()">⏹ Durdur</button>
+      </div>
+      <div id="searchStatus" class="status"></div>
+      <div id="autoStatus" class="status"></div>
     </div>
   </div>
 
-  <div id="pane-queue" class="hidden">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px">
-      <div class="status" id="queueStatus" style="margin:0">Yükleniyor...</div>
-      <button class="btn secondary small" onclick="loadQueue()">↻ Yenile</button>
-    </div>
-    <div class="creators" id="queue"></div>
-  </div>
-
+  <!-- EMAIL -->
   <div id="pane-email" class="hidden">
     <div class="card">
-      <h2>Email Hesapları (30 dolunca sonrakine geçer)</h2>
-      <p class="hint">Gmail için <b>uygulama şifresi</b>: <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">myaccount.google.com/apppasswords</a></p>
+      <h2>Email Hesapları (günlük limit dolunca sıradakine geçer)</h2>
+      <p class="hint">Gmail için <b>uygulama şifresi</b>: <a href="https://myaccount.google.com/apppasswords" target="_blank">apppasswords</a></p>
       <div class="row">
-        <div><label>Email</label><input id="acc_email" type="email" placeholder="hesap@gmail.com" /></div>
-        <div><label>Uygulama şifresi</label><input id="acc_pass" type="password" placeholder="xxxx xxxx xxxx xxxx" /></div>
+        <input id="acc_email" placeholder="email@gmail.com">
+        <input id="acc_pass" placeholder="uygulama şifresi">
       </div>
-      <label>Gönderen adı (ops.)</label><input id="acc_name" type="text" placeholder="Alper - CaptionAI" />
-      <button class="btn small" style="margin-top:10px" onclick="addAccount()">➕ Hesap Ekle</button>
+      <div class="row" style="margin-top:8px">
+        <input id="acc_name" placeholder="gönderen adı (ops.)">
+        <button class="btn small" onclick="addAccount()">➕ Hesap Ekle</button>
+      </div>
       <div class="acclist" id="accList"></div>
-      <div class="row" style="margin-top:14px">
-        <div><button class="btn full" onclick="startEmail()">▶️ Kampanyayı Başlat</button></div>
-        <div style="flex:0"><button class="btn secondary" onclick="stopEmail()">⏹ Durdur</button></div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn" onclick="startEmail()">▶️ Kuyruktakilere Gönder</button>
+        <button class="btn secondary" onclick="stopEmail()">⏹ Durdur</button>
       </div>
-      <div class="status" id="emailStatus"></div>
+      <div id="emailStatus" class="status"></div>
     </div>
     <div class="card">
       <h2>Gönderilen Email'ler</h2>
-      <button class="btn secondary small" onclick="loadSent()">↻ Yenile</button>
-      <div class="tbl-wrap" style="margin-top:10px"><table id="sentTbl"><thead><tr><th>Kisi</th><th>Email</th><th>Hesap</th><th>Tarih</th></tr></thead><tbody></tbody></table></div>
+      <button class="btn small secondary" onclick="loadSent()">↻ Yenile</button>
+      <div class="tbl-wrap" style="margin-top:10px"><table id="sentTbl"><thead><tr><th>Kişi</th><th>Email</th><th>Hesap</th><th>Tarih</th></tr></thead><tbody></tbody></table></div>
     </div>
   </div>
 
+  <!-- DATABASE -->
   <div id="pane-db" class="hidden">
     <div class="card">
       <h2>Database (tüm kayıtlar)</h2>
       <div class="row">
-        <div><input id="db_q" placeholder="🔍 ara (isim/@/email)" oninput="loadDb()" /></div>
-        <div style="flex:0"><select id="db_status" onchange="loadDb()"><option value="">Tüm durumlar</option><option value="queued">Kuyrukta</option><option value="sent">Gönderildi</option><option value="replied">Yanıtladı</option><option value="skipped">Atlandı</option></select></div>
-        <div style="flex:0"><button class="btn secondary small" onclick="loadDb()">↻</button></div>
+        <input id="db_q" placeholder="ara: kullanıcı / email" oninput="loadDb()">
+        <select id="db_status" onchange="loadDb()" style="max-width:180px">
+          <option value="">Tüm durumlar</option>
+          <option value="queued">Kuyrukta</option>
+          <option value="sent">Gönderildi</option>
+          <option value="replied">Yanıtladı</option>
+          <option value="skipped">Atlandı</option>
+        </select>
+        <button class="btn small secondary" onclick="loadDb()">↻</button>
+        <button class="btn small danger" onclick="deleteAll()">🗑 Toplu Sil</button>
       </div>
-      <div class="tbl-wrap" style="margin-top:12px"><table id="dbTbl"><thead><tr><th>Kisi</th><th>Takipçi</th><th>Dil</th><th>Email</th><th>Durum</th><th>Aksiyon</th></tr></thead><tbody></tbody></table></div>
-      <p class="hint">“Tekrar Bul” bir kişiyi kuyruğa geri alır (yeniden bulunur/gönderilir). “Sil” tamamen kaldırır.</p>
+      <div class="hint">“Gönder” o kişiye hemen email atar. “Sil” onay sormadan kaldırır. “Toplu Sil” seçili duruma göre (ya da hepsini) siler.</div>
+      <div class="tbl-wrap" style="margin-top:10px">
+        <table id="dbTbl"><thead><tr><th>Kişi</th><th>Takipçi</th><th>Dil</th><th>Email</th><th>Durum</th><th>Aksiyon</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div id="dbStatus" class="status"></div>
     </div>
   </div>
 
+  <!-- ANALIZ -->
   <div id="pane-stats" class="hidden">
-    <div class="card"><h2>Genel</h2><div class="kpis" id="kpis"></div></div>
-    <button class="btn secondary small" onclick="loadStats()">↻ Yenile</button>
+    <div class="card">
+      <h2>Genel</h2>
+      <button class="btn small secondary" onclick="loadStats()">↻ Yenile</button>
+      <div class="kpis" id="kpis" style="margin-top:12px"></div>
+    </div>
   </div>
 </div>
 
+<!-- ANAHTAR MODAL -->
 <div class="modal" id="keyModal">
   <div class="box">
     <h2 style="margin-top:0">Anahtarlar</h2>
-    <label>Apify API Key'leri (her satıra bir tane, biri bitince digerine gecer)</label>
-    <textarea id="k_apify" rows="3" placeholder="apify_api_xxx&#10;apify_api_yyy"></textarea>
-    <p class="hint"><a href="https://console.apify.com/account/integrations" target="_blank" rel="noopener">console.apify.com</a></p>
-    <label>Groq AI Key'leri (hiper-özel DM/email için, ücretsiz + yüksek limit)</label>
-    <textarea id="k_groq" rows="3" placeholder="gsk_xxx&#10;gsk_yyy"></textarea>
-    <p class="hint">Ücretsiz al: <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a> (kredi kartı yok, günde ~14.400 istek)</p>
-    <div style="display:flex; gap:8px; margin-top:14px">
-      <button class="btn full" onclick="saveKeys()">Kaydet & Test Et</button>
+    <label>Apify API Key'leri (her satıra bir tane; biri bitince diğerine geçer)</label>
+    <textarea id="k_apify" rows="3" placeholder="apify_api_xxx"></textarea>
+    <label>Groq AI Key'leri (hiper-özel email için, ücretsiz)</label>
+    <textarea id="k_groq" rows="3" placeholder="gsk_xxx"></textarea>
+    <p class="hint">Groq: <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a> · Apify: <a href="https://console.apify.com/account/integrations" target="_blank">console.apify.com</a>. Kaydedince kalıcı saklanır.</p>
+    <div class="row" style="margin-top:12px">
+      <button class="btn" onclick="saveKeys()">Kaydet & Test Et</button>
       <button class="btn secondary" onclick="closeKeys()">Kapat</button>
     </div>
-    <div class="status" id="keyStatus"></div>
+    <div id="keyStatus" class="status"></div>
   </div>
 </div>
 
 <script>
   const LANGS = {{ langs|tojson }};
-  let QUEUE = [], ACCOUNTS = [];
-  const COUNTRIES = { tr:{label:'🇹🇷 Türkçe',iso:'Türkiye'}, en:{label:'🇺🇸 İngilizce',iso:'ABD'}, es:{label:'🇪🇸 İspanyol',iso:'İspanya'}, de:{label:'🇩🇪 Almanca',iso:'Almanya'}, fr:{label:'🇫🇷 Fransızca',iso:'Fransa'}, ar:{label:'🇸🇦 Arapça',iso:'Arabistan'} };
-  const NICHE_CHIPS = { tr:{'🍽️ Yemek':['yemektarifi'],'📹 Vlog':['günlükvlog'],'💄 Moda':['kombin','makyaj'],'💪 Fitness':['gymtok'],'✈️ Gezi':['gezilecekyerler'],'🧠 Bilgi':['bilgipaylaşımı']}, en:{'🍽️ Food':['foodtiktok'],'📹 Vlog':['dailyvlog'],'💄 Fashion':['ootd'],'💪 Fitness':['gymtok'],'✈️ Travel':['traveltok'],'🧠 Info':['learnontiktok']}, es:{'🍽️ Comida':['recetas'],'📹 Vlog':['vlogdiario'],'💄 Moda':['moda']}, de:{'🍽️ Essen':['rezepte'],'💄 Mode':['mode']}, fr:{'🍽️ Cuisine':['recette'],'💄 Mode':['mode']}, ar:{'🍽️ طعام':['وصفات'],'💄 موضة':['موضة']} };
-  const DEFAULT_HASHTAGS = { tr:'yemektarifi, günlükvlog, kombin, gymtok, gezilecekyerler', en:'foodtiktok, dailyvlog, ootd, gymtok, traveltok', es:'recetas, vlogdiario, moda', de:'rezepte, vlog, mode', fr:'recette, vlog, mode', ar:'وصفات, فلوق, موضة' };
-  const selectedCountries = new Set();
+  let ACCOUNTS = [];
+  const COUNTRIES = { tr:{label:'🇹🇷 Türkçe',iso:'Turkiye'}, en:{label:'🇺🇸 İngilizce',iso:'ABD'}, es:{label:'🇪🇸 İspanyol',iso:'Ispanya'}, de:{label:'🇩🇪 Almanca',iso:'Almanya'}, fr:{label:'🇫🇷 Fransızca',iso:'Fransa'}, ar:{label:'🇸🇦 Arapça',iso:'Arabistan'} };
+  const DEFAULT_HASHTAGS = { tr:'yemektarifi, gunlukvlog, kombin, gymtok, gezilecekyerler', en:'foodtiktok, dailyvlog, ootd, gymtok, traveltok' };
+  const selectedCountries = new Set(['tr']);
   document.getElementById('hashtags').value = DEFAULT_HASHTAGS.tr;
 
-  (function(){ document.getElementById('countryBtns').innerHTML=Object.keys(COUNTRIES).map(k=>'<div class="cbtn" id="c-'+k+'" onclick="toggleCountry(\''+k+'\')">'+COUNTRIES[k].label+'</div>').join(''); })();
-  function toggleCountry(k){ const el=document.getElementById('c-'+k); if(selectedCountries.has(k)){selectedCountries.delete(k);el.classList.remove('on');}else{selectedCountries.add(k);el.classList.add('on');} const f=selectedCountries.values().next().value; buildChips(f||'tr'); }
-  function buildChips(lang){ const m=NICHE_CHIPS[lang]||NICHE_CHIPS.tr; document.getElementById('hashtagChips').innerHTML=Object.keys(m).map(k=>'<span class="chip" onclick="addNiche(\''+lang+'\',\''+k.replace(/'/g,"\\'")+'\')">'+k+'</span>').join(''); }
-  buildChips('tr');
-  function addNiche(lang,key){ const t=(NICHE_CHIPS[lang]||{})[key]||[]; const el=document.getElementById('hashtags'); const ex=new Set(el.value.split(',').map(s=>s.trim().replace(/^#/,'')).filter(Boolean)); t.forEach(x=>ex.add(x)); el.value=Array.from(ex).join(', '); }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+  function fmt(n){ n=+n||0; return n>=1000?(n/1000).toFixed(1).replace('.0','')+'K':''+n; }
+  function setS(id,msg,cls){ const el=document.getElementById(id); if(!el) return; el.textContent=msg; el.className='status'+(cls?' '+cls:''); }
 
-  function tab(t){ ['search','queue','email','db','stats'].forEach(x=>{ document.getElementById('pane-'+x).classList.toggle('hidden', x!==t); document.querySelector('.tab[data-t="'+x+'"]').classList.toggle('active', x===t); }); if(t==='queue') loadQueue(); if(t==='stats') loadStats(); if(t==='db') loadDb(); if(t==='email'){ pollEmail(); loadSent(); } }
+  (function(){
+    document.getElementById('countryBtns').innerHTML = Object.keys(COUNTRIES).map(k=>
+      '<div class="cbtn'+(selectedCountries.has(k)?' on':'')+'" id="c-'+k+'" onclick="toggleCountry(\''+k+'\')">'+COUNTRIES[k].label+'</div>').join('');
+  })();
+  function toggleCountry(k){ const el=document.getElementById('c-'+k); if(selectedCountries.has(k)){selectedCountries.delete(k);el.classList.remove('on');}else{selectedCountries.add(k);el.classList.add('on');} }
+
+  function tab(t){ ['search','email','db','stats'].forEach(x=>{ document.getElementById('pane-'+x).classList.toggle('hidden', x!==t); document.querySelector('.tab[data-t="'+x+'"]').classList.toggle('active', x===t); }); if(t==='stats') loadStats(); if(t==='db') loadDb(); if(t==='email'){ pollEmail(); loadSent(); } }
 
   function openKeys(){ document.getElementById('keyModal').classList.add('on'); }
   function closeKeys(){ document.getElementById('keyModal').classList.remove('on'); }
   async function saveKeys(){ setS('keyStatus','Test ediliyor...'); const r=await fetch('/api/keys',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({apify_tokens:document.getElementById('k_apify').value, groq_keys:document.getElementById('k_groq').value})}); const d=await r.json();
     document.getElementById('kd-apify').textContent='Apify: '+d.apify_count; document.getElementById('kd-apify').classList.toggle('on',d.apify_count>0);
     document.getElementById('kd-ai').textContent='AI: '+(d.ai_ok?'✓':(d.groq_count?'hata':'yok')); document.getElementById('kd-ai').classList.toggle('on',d.ai_ok);
-    setS('keyStatus', d.ai_ok?'AI calisiyor ✅':(d.ai_error||'Apify kaydedildi.'), !d.ai_ok && d.groq_count>0);
-    if(d.ai_ok || (d.apify_count>0 && !d.groq_count)) setTimeout(closeKeys,900);
+    setS('keyStatus', d.ai_ok?'AI çalışıyor, kalıcı kaydedildi ✅':(d.ai_error||'Kaydedildi.'), d.ai_ok?'ok':(d.groq_count?'err':''));
   }
 
   function payload(){ return { hashtags:document.getElementById('hashtags').value.split(',').map(s=>s.trim().replace(/^#/,'')).filter(Boolean), countries:Array.from(selectedCountries).map(k=>COUNTRIES[k].iso), min_followers:+document.getElementById('min_followers').value||3000, max_followers:+document.getElementById('max_followers').value||80000, target_count:+document.getElementById('target').value||60, strict_country:document.getElementById('strict_country').checked, require_email:document.getElementById('require_email').checked }; }
 
-  async function runFind(){ const p=payload(); if(!p.hashtags.length){ setS('searchStatus','Hashtag gir.',true); return; } const b=document.getElementById('findBtn'); b.disabled=true; b.innerHTML='<span class="spinner"></span>'; setS('searchStatus','Aranıyor...');
-    try{ const r=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)}); const d=await r.json(); if(!d.ok){ if(d.need_key) openKeys(); throw new Error(d.error); } setS('searchStatus','Tamam! '+d.count+' yeni kişi kuyruğa eklendi.'); }catch(e){ setS('searchStatus','Hata: '+e.message,true);} finally{ b.disabled=false; b.innerHTML='Sadece Bul'; } }
+  function curLang(){ return selectedCountries.values().next().value || 'tr'; }
 
-  async function runAuto(){ const p=payload(); if(!p.hashtags.length){ setS('searchStatus','Hashtag gir.',true); return; } const r=await fetch('/api/auto',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)}); const d=await r.json(); if(!d.ok){ if(d.need_key) openKeys(); setS('searchStatus','Hata: '+d.error,true); return; } setS('searchStatus','Auto başladı 🤖'); pollAuto(); }
-  async function stopAuto(){ await fetch('/api/auto/stop',{method:'POST'}); setS('autoStatus','Auto durduruldu.'); }
-  let autoTimer=null;
-  async function pollAuto(){ clearInterval(autoTimer); const tick=async()=>{ const r=await fetch('/api/auto/status'); const d=await r.json(); const a=d.auto, e=d.email; setS('autoStatus', (a.running?'🤖 Auto çalışıyor':'⏸ Auto durdu')+' · tur '+a.rounds+' · bulunan '+a.found+(e.running?' · email '+e.sent+'/'+e.total+(e.active_account?' ('+e.active_account+')':''):'')+' · '+(a.last||'')); if(!a.running) clearInterval(autoTimer); }; tick(); autoTimer=setInterval(tick,3000); }
-
-  async function loadQueue(){ setS('queueStatus','Yükleniyor...'); const r=await fetch('/api/queue?channel=dm'); const d=await r.json(); QUEUE=d.queue||[]; renderQueue(); setS('queueStatus',QUEUE.length+' kişi kuyrukta'); }
-  function renderQueue(){ const w=document.getElementById('queue'); if(!QUEUE.length){ w.innerHTML='<p style="color:var(--muted)">Kuyruk boş.</p>'; return; }
-    w.innerHTML=QUEUE.map((c,i)=>{ const mail=c.email?'<span class="badge mail" onclick="copyText(\''+c.email+'\',this)">✉️ '+esc(c.email)+'</span>':''; return '<div class="creator"><button class="del" onclick="skipCard('+i+')">×</button><div class="crow"><span class="cname">'+esc(c.nickname||c.username)+'</span><span class="csub">@'+esc(c.username)+'</span><span class="badge">'+fmt(c.followers)+' takipçi</span><span class="badge lang">'+esc(c.lang||'en')+'</span>'+mail+'</div><div class="dm">'+esc(c.message||'')+'</div><div class="acts"><button class="btn small" onclick="sendDm('+i+')">💬 DM At</button><button class="btn small secondary" onclick="copyText(QUEUE['+i+'].message,this)">📋 Kopyala</button><button class="btn small secondary" onclick="askReply('+i+')">📝 Yanıt</button></div></div>'; }).join('');
+  async function genHashtags(){ const b=document.getElementById('htBtn'); b.disabled=true; setS('htStatus','AI üretiyor...');
+    try{ const r=await fetch('/api/hashtags/suggest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lang:curLang(), countries:Array.from(selectedCountries).map(k=>COUNTRIES[k].iso), niche:document.getElementById('niche').value.trim(), count:14})}); const d=await r.json();
+      if(!d.ok){ if(d.error&&d.error.indexOf('Groq')>=0) openKeys(); setS('htStatus','Hata: '+(d.error||'?'),'err'); }
+      else { document.getElementById('hashtags').value=(d.hashtags||[]).join(', '); setS('htStatus',(d.hashtags||[]).length+' hashtag üretildi ✅','ok'); }
+    }catch(e){ setS('htStatus','Hata: '+e.message,'err'); } b.disabled=false;
   }
-  async function sendDm(i){ const c=QUEUE[i]; await navigator.clipboard.writeText(c.message||''); window.open(c.profile,'_blank','noopener'); await fetch('/api/sent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:c.username,message:c.message,channel:'dm'})}); QUEUE.splice(i,1); renderQueue(); }
-  async function skipCard(i){ const c=QUEUE[i]; await fetch('/api/skip',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:c.username})}); QUEUE.splice(i,1); renderQueue(); }
-  async function askReply(i){ const c=QUEUE[i]; const reply=prompt('Gelen yanıtı yapıştır:'); if(!reply) return; const r=await fetch('/api/reply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:c.username,dm:c.message,reply,lang:c.lang})}); const d=await r.json(); if(d.ok){ let m='Kaydedildi. '+(d.sentiment||''); if(d.suggested_reply) m+='\n\nÖneri:\n'+d.suggested_reply; alert(m); } }
 
-  function renderAccts(){ document.getElementById('kd-acc').textContent='Hesap: '+ACCOUNTS.length; document.getElementById('kd-acc').classList.toggle('on',ACCOUNTS.length>0); document.getElementById('accList').innerHTML=ACCOUNTS.map((a,i)=>'<div class="accitem"><span>'+esc(a.email)+(a.from_name?' · '+esc(a.from_name):'')+'</span><span class="x" onclick="delAccount('+i+')">×</span></div>').join(''); }
+  async function runFind(){ const p=payload(); if(!p.hashtags.length){ setS('searchStatus','Hashtag gir.','err'); return; } const b=document.getElementById('findBtn'); b.disabled=true; setS('searchStatus','Aranıyor...');
+    try{ const r=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)}); const d=await r.json(); if(!d.ok){ if(d.need_key) openKeys(); throw new Error(d.error); } setS('searchStatus','Tamam! '+d.count+' yeni kişi eklendi.','ok'); }catch(e){ setS('searchStatus','Hata: '+e.message,'err'); } b.disabled=false;
+  }
+  async function runAuto(){ const p=payload(); if(!p.hashtags.length){ setS('searchStatus','Hashtag gir.','err'); return; } const r=await fetch('/api/auto',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)}); const d=await r.json(); if(!d.ok){ if(d.need_key) openKeys(); setS('searchStatus','Hata: '+d.error,'err'); return; } setS('searchStatus','Başladı 🤖','ok'); pollAuto(); }
+  async function stopAuto(){ await fetch('/api/auto/stop',{method:'POST'}); setS('autoStatus','Durduruldu.'); }
+  let autoTimer=null;
+  async function pollAuto(){ clearInterval(autoTimer); const tick=async()=>{ const r=await fetch('/api/auto/status'); const d=await r.json(); const a=d.auto,e=d.email; setS('autoStatus', (a.running?'🤖 Çalışıyor':'⏸ Durdu')+' · tur '+a.rounds+' · bulunan '+a.found+(a.combo?' · #'+a.combo:'')+(e&&e.running?' · email '+e.sent+'/'+e.total:'')+' · '+(a.last||'')); }; tick(); autoTimer=setInterval(tick,3500); }
+
+  function renderAccts(){ document.getElementById('kd-acc').textContent='Hesap: '+ACCOUNTS.length; document.getElementById('kd-acc').classList.toggle('on',ACCOUNTS.length>0); document.getElementById('accList').innerHTML=ACCOUNTS.map((a,i)=>'<div class="accitem"><span>'+esc(a.email)+(a.from_name?' · '+esc(a.from_name):'')+'</span><span class="x" onclick="delAccount('+i+')">✕</span></div>').join(''); }
   async function pushAccounts(){ await fetch('/api/email/accounts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accounts:ACCOUNTS})}); renderAccts(); }
-  function addAccount(){ const e=document.getElementById('acc_email').value.trim(), p=document.getElementById('acc_pass').value.trim(), n=document.getElementById('acc_name').value.trim(); if(!e||!p){ setS('emailStatus','Email + şifre gir.',true); return; } ACCOUNTS.push({email:e,password:p,from_name:n}); document.getElementById('acc_email').value=''; document.getElementById('acc_pass').value=''; document.getElementById('acc_name').value=''; pushAccounts(); setS('emailStatus','Hesap eklendi.'); }
+  function addAccount(){ const e=document.getElementById('acc_email').value.trim(), p=document.getElementById('acc_pass').value.trim(), n=document.getElementById('acc_name').value.trim(); if(!e||!p){ setS('emailStatus','Email + şifre gir.','err'); return; } ACCOUNTS.push({email:e,password:p,from_name:n}); document.getElementById('acc_email').value=''; document.getElementById('acc_pass').value=''; document.getElementById('acc_name').value=''; pushAccounts(); setS('emailStatus','Hesap eklendi (kalıcı).','ok'); }
   function delAccount(i){ ACCOUNTS.splice(i,1); pushAccounts(); }
-  async function startEmail(){ if(!ACCOUNTS.length){ setS('emailStatus','Önce hesap ekle.',true); return; } await pushAccounts(); const r=await fetch('/api/email/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})}); const d=await r.json(); if(!d.ok){ setS('emailStatus','Hata: '+d.error,true); return; } setS('emailStatus','Başladı...'); pollEmail(); }
+  async function startEmail(){ if(!ACCOUNTS.length){ setS('emailStatus','Önce hesap ekle.','err'); return; } await pushAccounts(); const r=await fetch('/api/email/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})}); const d=await r.json(); if(!d.ok){ setS('emailStatus','Hata: '+d.error,'err'); return; } setS('emailStatus','Başladı...'); pollEmail(); }
   async function stopEmail(){ await fetch('/api/email/stop',{method:'POST'}); setS('emailStatus','Durduruldu.'); }
   let emTimer=null;
-  async function pollEmail(){ clearInterval(emTimer); const tick=async()=>{ const r=await fetch('/api/email/status'); const d=await r.json(); const s=d.status; setS('emailStatus',(s.running?'▶️ Çalışıyor':'⏸ Durdu')+' · '+s.sent+'/'+s.total+(s.active_account?' · '+s.active_account:'')+(s.error?' · '+s.error:''), !!s.error&&!s.running); if(!s.running){ clearInterval(emTimer); loadSent(); } }; tick(); emTimer=setInterval(tick,3000); }
+  async function pollEmail(){ clearInterval(emTimer); const tick=async()=>{ const r=await fetch('/api/email/status'); const d=await r.json(); const s=d.status; setS('emailStatus',(s.running?'▶️ Çalışıyor':'⏸ Durdu')+' · '+s.sent+'/'+s.total+(s.active_account?' · '+s.active_account:'')+(s.error?' · '+s.error:''), (s.error&&!s.running)?'err':''); if(!s.running){ clearInterval(emTimer); loadSent(); } }; tick(); emTimer=setInterval(tick,3500); }
 
-  async function loadSent(){ const r=await fetch('/api/sent-emails'); const d=await r.json(); document.querySelector('#sentTbl tbody').innerHTML=(d.rows||[]).map(x=>'<tr><td>'+esc(x.nickname||x.username)+'</td><td>'+esc(x.email||'')+'</td><td>'+esc(x.sent_account||'')+'</td><td>'+esc((x.sent_at||'').slice(0,16).replace('T',' '))+'</td></tr>').join('')||'<tr><td colspan=4 style="color:var(--muted)">Henüz gönderilmedi</td></tr>'; }
+  async function loadSent(){ const r=await fetch('/api/sent-emails'); const d=await r.json(); document.querySelector('#sentTbl tbody').innerHTML=(d.rows||[]).map(x=>'<tr><td>'+esc(x.nickname||x.username)+'</td><td>'+esc(x.email||'')+'</td><td>'+esc(x.sent_account||'')+'</td><td>'+esc((x.sent_at||'').slice(0,16).replace('T',' '))+'</td></tr>').join('')||'<tr><td colspan=4>Henüz gönderilmedi</td></tr>'; }
 
   async function loadDb(){ const q=document.getElementById('db_q').value.trim(); const st=document.getElementById('db_status').value; const r=await fetch('/api/db?q='+encodeURIComponent(q)+'&status='+encodeURIComponent(st)); const d=await r.json();
-    document.querySelector('#dbTbl tbody').innerHTML=(d.rows||[]).map(x=>'<tr><td>'+esc(x.nickname||x.username)+'<div class="csub">@'+esc(x.username)+'</div></td><td>'+fmt(x.followers)+'</td><td>'+esc(x.lang||'')+'</td><td>'+esc(x.email||'-')+'</td><td>'+esc(x.status||'')+'</td><td><button class="btn small secondary" onclick="requeue(\''+esc(x.username)+'\')">Tekrar Bul</button> <button class="btn small secondary" onclick="delRow(\''+esc(x.username)+'\')">Sil</button></td></tr>').join('')||'<tr><td colspan=6 style="color:var(--muted)">Kayıt yok</td></tr>'; }
+    document.querySelector('#dbTbl tbody').innerHTML=(d.rows||[]).map(x=>{ const u=esc(x.username); const send=x.email?'<button class="btn small" onclick="sendOne(\''+u+'\',this)">✉️ Gönder</button> ':''; return '<tr><td>'+esc(x.nickname||x.username)+'<br><span class="csub">@'+u+'</span></td><td>'+fmt(x.followers)+'</td><td>'+esc(x.lang||'')+'</td><td>'+esc(x.email||'-')+'</td><td><span class="st">'+esc(x.status||'')+'</span></td><td>'+send+'<button class="btn small secondary" onclick="requeue(\''+u+'\')">Tekrar</button> <button class="btn small danger" onclick="delRow(\''+u+'\')">Sil</button></td></tr>'; }).join('')||'<tr><td colspan=6>Kayıt yok</td></tr>'; }
+  async function sendOne(u,btn){ if(btn){btn.disabled=true;btn.textContent='...';} const r=await fetch('/api/db/send-one',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u})}); const d=await r.json(); if(d.ok){ setS('dbStatus','Gönderildi ✅ ('+(d.account||'')+')','ok'); } else { setS('dbStatus','Hata: '+(d.error||'?'),'err'); } loadDb(); }
   async function requeue(u){ await fetch('/api/db/requeue',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u})}); loadDb(); }
-  async function delRow(u){ if(!confirm('@'+u+' silinsin mi? (bir daha bulunabilir olur)')) return; await fetch('/api/db/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u})}); loadDb(); }
+  async function delRow(u){ await fetch('/api/db/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u})}); loadDb(); }
+  async function deleteAll(){ const st=document.getElementById('db_status').value; const label=st?('"'+st+'" durumundakiler'):'TÜM kayıtlar'; if(!confirm(label+' silinsin mi? (tek onay)')) return; const r=await fetch('/api/db/delete-all',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:st||null})}); const d=await r.json(); setS('dbStatus',(d.deleted||0)+' kayıt silindi.','ok'); loadDb(); }
 
-  async function loadStats(){ const r=await fetch('/api/stats'); const d=await r.json(); const s=d.stats; document.getElementById('kpis').innerHTML=[['Toplam',s.total],['Gönderilen',s.sent],['Yanıt',s.replied],['Yanıt Oranı',s.reply_rate+'%'],['Kuyruk',s.queued],['Email\'li',s.with_email],['Bugün DM',s.sent_today_dm],['Bugün Email',s.sent_today_email]].map(([l,n])=>'<div class="kpi"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>').join(''); }
+  async function loadStats(){ const r=await fetch('/api/stats'); const d=await r.json(); const s=d.stats; document.getElementById('kpis').innerHTML=[['Toplam',s.total],['Gönderilen',s.sent],['Yanıt',s.replied],['Yanıt Oranı',s.reply_rate+'%'],['Kuyruk',s.queued],['Email\'li',s.with_email],['Bugün Email',s.sent_today_email]].map(([l,n])=>'<div class="kpi"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>').join(''); }
 
-  function setS(id,msg,err){ const el=document.getElementById(id); if(!el) return; el.textContent=msg; el.className='status'+(err?' err':''); }
-  function copyText(t,btn){ navigator.clipboard.writeText(t||'').then(()=>{ if(btn){ const o=btn.innerHTML; btn.innerHTML='✅'; btn.classList.add('copied'); setTimeout(()=>{btn.innerHTML=o;btn.classList.remove('copied');},1200);} }); }
-  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
-  function fmt(n){ n=+n||0; return n>=1000?(n/1000).toFixed(1).replace('.0','')+'K':''+n; }
+  // acilista mevcut anahtar/hesap durumunu goster
+  (async function(){ try{ const r=await fetch('/api/auto/status'); const d=await r.json(); if(d.auto&&d.auto.running) pollAuto(); }catch(e){} })();
 </script>
 </body>
 </html>
