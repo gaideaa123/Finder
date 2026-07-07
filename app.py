@@ -1,13 +1,9 @@
 """CaptionAI Finder - Groq AI + Apify + coklu hesap Email + CRM + Auto dongu.
 
-Email-only autopilot: TikTok'ta creator bulur -> email'ini bulur -> Groq ile
-hiper-ozel EMAIL uretir -> otomatik gonderir. DM GONDERMEZ. Ayni kisiyi tekrar
-getirmez (CRM dedup + arama sirasinda eleme).
-
-Max performans: HER hashtag kombinasyonu icin hedef 60 kisi taranir; bir Apify
-token/kota bitince otomatik digerine gecer. Anahtarlar arka planda SUREKLI kontrol edilir.
-
-Sayfalar:  /  panel  ·  /checker bakiye  ·  /setup kurulum GUI (anahtar gir + baslat)
+Email-only autopilot: TikTok'ta creator bulur -> email cikarir -> Groq ile
+hiper-ozel, DOGRU DILDE (TR->TR, EN->EN) email + kisiye ozel KONU uretir ->
+otomatik gonderir. Her hashtag icin 60 kisi, Apify token bitince digerine gecer.
+Ayni kisiyi tekrar getirmez. Panelden anahtar girilir (kalici kaydedilir) ve baslatilir.
 """
 
 import json
@@ -18,31 +14,33 @@ import time
 from flask import Flask, jsonify, render_template, request
 
 import crm
+import emailer
 from finder import find_creators, SUPPORTED_LANGS, lang_for_country, country_to_iso
 from emailer import start_email_campaign, get_status as email_status, stop_campaign
 
 try:
-    from ai import AIBrain, QuotaError
+    from ai import AIBrain, QuotaError, _fallback_subject
 except Exception:
     AIBrain, QuotaError = None, Exception
+    def _fallback_subject(c, lang="tr"):
+        return (c.get("nickname") or c.get("username") or "hey")
 
 app = Flask(__name__)
 crm.init_db()
 
-for _mod, _bp in (("checker", "checker_bp"), ("setup", "setup_bp")):
-    try:
-        _m = __import__(_mod)
-        app.register_blueprint(getattr(_m, _bp))
-    except Exception:
-        pass
+# Sadece checker (bakiye) blueprint'i. Setup ayri sayfa DEGIL; her sey ana panelde.
+try:
+    from checker import checker_bp
+    app.register_blueprint(checker_bp)
+except Exception:
+    pass
 
 SITE_URL = os.environ.get("SITE_URL", "thecaptionai.com")
 PER_COMBO_TARGET = int(os.environ.get("PER_COMBO_TARGET", 60))
+SECRETS_FILE = os.path.join(os.environ.get("DATA_DIR", "."), "secrets.local.json")
 
 STATE = {
-    "apify_tokens": [],
-    "groq_keys": [],
-    "accounts": [],
+    "apify_tokens": [], "groq_keys": [], "accounts": [],
     "auto": {"running": False, "found": 0, "rounds": 0, "last": "", "stop": False, "combo": ""},
     "monitor": {"ts": 0, "apify": [], "groq": []},
 }
@@ -56,21 +54,18 @@ PRODUCT_PITCH = os.environ.get("PRODUCT_PITCH") or (
 )
 
 FALLBACK = {
-    "tr": "selam {name}, videolarini bir suredir takip ediyorum, tarzin cok iyi. caption yazmak beni hep zorluyordu, 16 yasindayim bunun icin kucuk bir arac yaptim: konuyu yaz saniyeler icinde 4 hazir caption. denersen fikrini merak ederim, link biomda",
-    "en": "hey {name}, been following your stuff and your style is great. writing captions always slowed me down, so at 16 i built a little tool: type the topic, get 4 ready captions in seconds. would love your honest take, link's in my bio",
-    "es": "hola {name}, sigo tu contenido y tu estilo me encanta. escribir captions me costaba, con 16 anos hice una herramienta: escribes el tema y salen 4 captions en segundos. me encantaria tu opinion, link en mi bio",
-    "de": "hey {name}, verfolge deinen content, dein stil ist top. captions schreiben hat mich aufgehalten, mit 16 hab ich ein tool gebaut: thema eingeben, 4 fertige captions in sekunden. feedback ware toll, link in bio",
-    "fr": "hey {name}, je suis ton contenu, ton style est top. ecrire les legendes me ralentissait, a 16 ans j'ai fait un outil: tu tapes le sujet, 4 legendes en secondes. ton avis m'interesse, lien dans ma bio",
-    "ar": "\u0645\u0631\u062d\u0628\u0627 {name}\u060c \u0623\u062a\u0627\u0628\u0639 \u0645\u062d\u062a\u0648\u0627\u0643 \u0648\u0623\u0633\u0644\u0648\u0628\u0643 \u0631\u0627\u0626\u0639. \u0643\u062a\u0627\u0628\u0629 \u0627\u0644\u0643\u0627\u0628\u0634\u0646 \u0643\u0627\u0646\u062a \u062a\u0628\u0637\u0626\u0646\u064a\u060c \u0648\u0639\u0645\u0631\u064a 16 \u0635\u0646\u0639\u062a \u0623\u062f\u0627\u0629: \u062a\u0643\u062a\u0628 \u0627\u0644\u0645\u0648\u0636\u0648\u0639 \u0648\u062a\u0639\u0637\u064a\u0643 4 \u0643\u0627\u0628\u0634\u0646\u0627\u062a \u0628\u062b\u0648\u0627\u0646\u064a. \u064a\u0647\u0645\u0646\u064a \u0631\u0623\u064a\u0643\u060c \u0627\u0644\u0631\u0627\u0628\u0637 \u0628\u0627\u0644\u0628\u0627\u064a\u0648",
+    "tr": "selam {name}, videolarini bir suredir takip ediyorum, tarzin cok iyi. caption yazmak beni hep zorluyordu, 16 yasindayim bunun icin kucuk bir arac yaptim: konuyu yaz saniyeler icinde 4 hazir caption cikiyor. denersen fikrini cok merak ederim, detaylar: {site}",
+    "en": "hey {name}, been following your stuff and your style is great. writing captions always slowed me down, so at 16 i built a little tool: type the topic, get 4 ready captions in seconds. would love your honest take, details: {site}",
+    "es": "hola {name}, sigo tu contenido y tu estilo me encanta. escribir captions me costaba, con 16 anos hice una herramienta: escribes el tema y salen 4 captions en segundos. me encantaria tu opinion, detalles: {site}",
+    "de": "hey {name}, ich verfolge deinen content, dein stil ist top. captions schreiben hat mich immer aufgehalten, mit 16 habe ich ein kleines tool gebaut: thema eingeben, 4 fertige captions in sekunden. dein feedback ware toll, details: {site}",
+    "fr": "hey {name}, je suis ton contenu, ton style est top. ecrire les legendes me ralentissait, a 16 ans j'ai fait un petit outil: tu tapes le sujet, 4 legendes en secondes. ton avis m'interesse, details: {site}",
+    "ar": "\u0645\u0631\u062d\u0628\u0627 {name}\u060c \u0623\u062a\u0627\u0628\u0639 \u0645\u062d\u062a\u0648\u0627\u0643 \u0648\u0623\u0633\u0644\u0648\u0628\u0643 \u0631\u0627\u0626\u0639. \u0643\u062a\u0627\u0628\u0629 \u0627\u0644\u0643\u0627\u0628\u0634\u0646 \u0643\u0627\u0646\u062a \u062a\u0628\u0637\u0626\u0646\u064a\u060c \u0648\u0639\u0645\u0631\u064a 16 \u0635\u0646\u0639\u062a \u0623\u062f\u0627\u0629: \u062a\u0643\u062a\u0628 \u0627\u0644\u0645\u0648\u0636\u0648\u0639 \u0648\u062a\u0623\u062a\u064a\u0643 4 \u0643\u0627\u0628\u0634\u0646\u0627\u062a \u0628\u062b\u0648\u0627\u0646\u064a. \u064a\u0647\u0645\u0646\u064a \u0631\u0623\u064a\u0643\u060c \u0627\u0644\u062a\u0641\u0627\u0635\u064a\u0644: {site}",
 }
 
-def _fallback(creator, channel="email"):
+def _fallback(creator):
     lang = creator.get("lang", "en")
-    msg = FALLBACK.get(lang, FALLBACK["en"]).replace("{name}", creator.get("nickname") or creator.get("username", ""))
-    if channel == "email":
-        for t in ["link biomda", "link's in my bio", "link en mi bio", "link in bio", "lien dans ma bio", "\u0627\u0644\u0631\u0627\u0628\u0637 \u0628\u0627\u0644\u0628\u0627\u064a\u0648"]:
-            msg = msg.replace(t, SITE_URL)
-    return msg
+    name = creator.get("nickname") or creator.get("username", "")
+    return FALLBACK.get(lang, FALLBACK["en"]).replace("{name}", name).replace("{site}", SITE_URL)
 
 def _brain():
     if AIBrain is None or not STATE["groq_keys"]:
@@ -80,18 +75,53 @@ def _brain():
     except Exception:
         return None
 
-def _dm_for(creator, channel="email", brain=None, learned=""):
+def _dm_for(creator, brain=None, learned=""):
     b = brain or _brain()
     if b:
         try:
             return b.generate_dm(creator, creator.get("lang", "en"), PRODUCT_PITCH, learned,
-                                 link_url=SITE_URL, channel=channel)
+                                 link_url=SITE_URL, channel="email")
         except Exception:
             pass
-    return _fallback(creator, channel)
+    return _fallback(creator)
 
 def _email_body(creator):
-    return _dm_for(creator, channel="email")
+    return _dm_for(creator)
+
+def _email_subject(creator):
+    b = _brain()
+    if b:
+        try:
+            return b.generate_subject(creator, creator.get("lang", "tr"))
+        except Exception:
+            pass
+    return _fallback_subject(creator, creator.get("lang", "tr"))
+
+# ---- kalici anahtar/hesap kaydi (panel -> secrets.local.json) -----------
+
+def _load_secrets_file() -> dict:
+    if os.path.exists(SECRETS_FILE):
+        try:
+            with open(SECRETS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def _save_secrets_file(patch: dict):
+    d = _load_secrets_file()
+    d.update(patch)
+    folder = os.path.dirname(SECRETS_FILE)
+    if folder and not os.path.exists(folder):
+        try:
+            os.makedirs(folder, exist_ok=True)
+        except Exception:
+            pass
+    try:
+        with open(SECRETS_FILE, "w", encoding="utf-8") as f:
+            json.dump(d, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
 
 def _run_search(data):
     tokens = STATE["apify_tokens"] or ([data.get("apify_token")] if data.get("apify_token") else [])
@@ -147,7 +177,7 @@ def _finalize(rows, countries):
             continue
         if em:
             seen_e.add(em)
-        r["message"] = _dm_for(r, channel="email", brain=brain, learned=learned)
+        r["message"] = _dm_for(r, brain=brain, learned=learned)
         fresh.append(r)
     crm.upsert_contacts(fresh)
     return fresh
@@ -163,12 +193,14 @@ def health():
 @app.route("/api/keys", methods=["POST"])
 def api_keys():
     data = request.get_json(force=True) or {}
-    for field, key in (("apify_tokens", "apify_tokens"), ("groq_keys", "groq_keys")):
+    for field in ("apify_tokens", "groq_keys"):
         val = data.get(field)
         if isinstance(val, str):
             val = [t.strip() for t in val.replace("\n", ",").split(",") if t.strip()]
         if isinstance(val, list):
-            STATE[key] = [t.strip() for t in val if t and t.strip()]
+            STATE[field] = [t.strip() for t in val if t and t.strip()]
+    # KALICI kaydet (restart'ta kaybolmasin)
+    _save_secrets_file({"apify_tokens": STATE["apify_tokens"], "groq_keys": STATE["groq_keys"]})
     ai_ok, ai_err = False, ""
     b = _brain()
     if b:
@@ -190,9 +222,8 @@ def api_hashtags():
     if not b:
         return jsonify({"ok": False, "error": "Once Groq key ekle."}), 400
     try:
-        tags = b.generate_hashtags(
-            lang=data.get("lang", "tr"), countries=data.get("countries") or [],
-            niche_hint=data.get("niche", ""), count=int(data.get("count", 12)))
+        tags = b.generate_hashtags(lang=data.get("lang", "tr"), countries=data.get("countries") or [],
+                                   niche_hint=data.get("niche", ""), count=int(data.get("count", 12)))
         return jsonify({"ok": True, "hashtags": tags})
     except QuotaError:
         return jsonify({"ok": False, "error": "Groq kotasi bitti."}), 429
@@ -208,6 +239,7 @@ def api_accounts():
         if e and p:
             clean.append({"email": e, "password": p, "from_name": (a.get("from_name") or "").strip()})
     STATE["accounts"] = clean
+    _save_secrets_file({"email_accounts": clean})
     return jsonify({"ok": True, "count": len(clean), "emails": [a["email"] for a in clean]})
 
 @app.route("/api/search", methods=["POST"])
@@ -219,15 +251,18 @@ def api_search():
     fresh = _finalize(rows, data.get("countries") or [])
     return jsonify({"ok": True, "count": len(fresh), "creators": fresh})
 
+def _email_cfg():
+    return {
+        "provider": os.environ.get("EMAIL_PROVIDER", "gmail"), "accounts": STATE["accounts"],
+        "subject": os.environ.get("EMAIL_SUBJECT", "merhaba"),
+        "daily_limit": int(os.environ.get("DAILY_LIMIT", 30)),
+        "build_body": _email_body, "build_subject": _email_subject,
+    }
+
 def _start_email():
     if not STATE["accounts"]:
         return {"ok": False, "error": "Once email hesabi ekle."}
-    return start_email_campaign({
-        "provider": os.environ.get("EMAIL_PROVIDER", "gmail"), "accounts": STATE["accounts"],
-        "subject": os.environ.get("EMAIL_SUBJECT", "videolarin icin ufak bir sey"),
-        "daily_limit": int(os.environ.get("DAILY_LIMIT", 30)),
-        "build_body": _email_body,
-    })
+    return start_email_campaign(_email_cfg())
 
 def _combos_from(hashtags):
     hs = [h for h in (hashtags or []) if h]
@@ -238,7 +273,7 @@ def _combos_from(hashtags):
 
 def _auto_loop(data):
     STATE["auto"] = {"running": True, "found": 0, "rounds": 0, "last": "baslatildi", "stop": False, "combo": ""}
-    idle_sleep = int(os.environ.get("IDLE_SLEEP", 0))
+    idle_sleep = int(os.environ.get("IDLE_SLEEP", 3600))
     combos = _combos_from(data.get("hashtags"))
     countries = data.get("countries") or []
     try:
@@ -259,23 +294,22 @@ def _auto_loop(data):
                 STATE["auto"]["found"] += len(fresh)
                 STATE["auto"]["rounds"] += 1
                 round_found += len(fresh)
-                STATE["auto"]["last"] = f"[{STATE['auto']['combo']}] {len(fresh)} yeni, email atiliyor..."
-                _start_email()
-                while email_status().get("running"):
-                    if STATE["auto"]["stop"]:
-                        break
-                    time.sleep(3)
+                if fresh:
+                    STATE["auto"]["last"] = f"[{STATE['auto']['combo']}] {len(fresh)} yeni kisi, email atiliyor..."
+                    _start_email()
+                    while email_status().get("running"):
+                        if STATE["auto"]["stop"]:
+                            break
+                        time.sleep(3)
+                else:
+                    STATE["auto"]["last"] = f"[{STATE['auto']['combo']}] yeni kisi yok, sonraki hashtag..."
                 time.sleep(2)
             if round_found == 0:
-                if idle_sleep > 0 and not STATE["auto"]["stop"]:
-                    STATE["auto"]["last"] = f"Tum kombolarda yeni kisi yok, {idle_sleep}s sonra tekrar."
-                    slept = 0
-                    while slept < idle_sleep and not STATE["auto"]["stop"]:
-                        time.sleep(3)
-                        slept += 3
-                    continue
-                STATE["auto"]["last"] = "Yeni kisi kalmadi, durdu."
-                break
+                # HATA DEGIL: normal durum. Bir sure bekleyip tekrar tara.
+                STATE["auto"]["last"] = f"Su an yeni kisi yok. {idle_sleep//60} dk sonra otomatik tekrar taranacak."
+                slept = 0
+                while slept < idle_sleep and not STATE["auto"]["stop"]:
+                    time.sleep(3); slept += 3
     except Exception as e:  # noqa: BLE001
         STATE["auto"]["last"] = f"Durdu: {str(e)[:120]}"
     finally:
@@ -310,96 +344,16 @@ def api_auto_stop():
     stop_campaign()
     return jsonify({"ok": True})
 
-# ---- GUI kontrol (setup sayfasindan Baslat/Durdur) -----------------------
-
-def _ctrl_ok():
-    ra = (request.remote_addr or "").strip()
-    if ra in ("127.0.0.1", "::1", "localhost", ""):
-        return True
-    if os.environ.get("ALLOW_SETUP") != "1":
-        return False
-    pw = os.environ.get("SETUP_PASSWORD")
-    if not pw:
-        return True
-    return (request.headers.get("X-Setup-Password") or request.args.get("pw")) == pw
-
-def _targeting_config():
-    """secrets.local.json targeting + env'den auto config uretir."""
-    tg = {}
-    for p in ("secrets.local.json", os.path.join(os.environ.get("DATA_DIR", "."), "secrets.local.json")):
-        if os.path.exists(p):
-            try:
-                with open(p, "r", encoding="utf-8") as f:
-                    tg = (json.load(f) or {}).get("targeting") or {}
-            except Exception:
-                tg = {}
-            break
-    def pick(env, key, default):
-        v = os.environ.get(env)
-        return v if v not in (None, "") else tg.get(key, default)
-    return {
-        "hashtags": _norm_list(pick("HASHTAGS", "hashtags", "")),
-        "countries": _norm_list(pick("COUNTRIES", "countries", "")),
-        "min_followers": int(pick("MIN_FOLLOWERS", "min_followers", 3000) or 3000),
-        "max_followers": int(pick("MAX_FOLLOWERS", "max_followers", 80000) or 80000),
-        "target_count": PER_COMBO_TARGET,
-        "require_email": True,
-        "strict_country": os.environ.get("STRICT_COUNTRY", "1") == "1",
-    }
-
-@app.route("/api/control/status")
-def api_control_status():
-    if not _ctrl_ok():
-        return jsonify({"ok": False, "error": "auth"}), 403
-    return jsonify({"ok": True, "auto": STATE["auto"], "email": email_status(),
-                    "keys": {"apify": len(STATE["apify_tokens"]), "groq": len(STATE["groq_keys"]),
-                             "accounts": len(STATE["accounts"])}})
-
-@app.route("/api/control/reload", methods=["POST"])
-def api_control_reload():
-    if not _ctrl_ok():
-        return jsonify({"ok": False, "error": "auth"}), 403
-    bootstrap_from_env()
-    return jsonify({"ok": True, "apify": len(STATE["apify_tokens"]),
-                    "groq": len(STATE["groq_keys"]), "accounts": len(STATE["accounts"])})
-
-@app.route("/api/control/start", methods=["POST"])
-def api_control_start():
-    if not _ctrl_ok():
-        return jsonify({"ok": False, "error": "auth"}), 403
-    bootstrap_from_env()  # dosyadan en guncel anahtar + hesaplari yukle
-    if not STATE["apify_tokens"]:
-        return jsonify({"ok": False, "error": "Apify token yok. Once kaydet."}), 400
-    if not STATE["groq_keys"]:
-        return jsonify({"ok": False, "error": "Groq key yok. Once kaydet."}), 400
-    if not STATE["accounts"]:
-        return jsonify({"ok": False, "error": "Email hesabi yok. Once ekle."}), 400
-    cfg = _targeting_config()
-    if not cfg["hashtags"]:
-        return jsonify({"ok": False, "error": "Hashtag yok. Hedeflemeyi doldur (AI ile uretebilirsin)."}), 400
-    started = _spawn_auto(cfg)
-    return jsonify({"ok": True, "started": started, "running": STATE["auto"]["running"]})
-
-@app.route("/api/control/stop", methods=["POST"])
-def api_control_stop():
-    if not _ctrl_ok():
-        return jsonify({"ok": False, "error": "auth"}), 403
-    STATE["auto"]["stop"] = True
-    stop_campaign()
-    return jsonify({"ok": True})
-
-# ---- Surekli monitor -----------------------------------------------------
+# ---- monitor -------------------------------------------------------------
 
 def _monitor_tick():
     try:
         from checker import apify_check, groq_check
     except Exception:
         return
-    STATE["monitor"] = {
-        "ts": time.time(),
-        "apify": [apify_check(t) for t in STATE["apify_tokens"]],
-        "groq": [groq_check(k) for k in STATE["groq_keys"]],
-    }
+    STATE["monitor"] = {"ts": time.time(),
+                        "apify": [apify_check(t) for t in STATE["apify_tokens"]],
+                        "groq": [groq_check(k) for k in STATE["groq_keys"]]}
 
 def _monitor_loop():
     interval = int(os.environ.get("MONITOR_INTERVAL", 900))
@@ -499,6 +453,27 @@ def api_delete():
         crm.delete_contact(u)
     return jsonify({"ok": True})
 
+@app.route("/api/db/delete-all", methods=["POST"])
+def api_delete_all():
+    status = (request.get_json(force=True) or {}).get("status") or None
+    n = crm.delete_all(status)
+    return jsonify({"ok": True, "deleted": n})
+
+@app.route("/api/db/send-one", methods=["POST"])
+def api_send_one():
+    """Panelden tek kisiye MANUEL email gonder."""
+    u = (request.get_json(force=True) or {}).get("username")
+    if not u:
+        return jsonify({"ok": False, "error": "username gerekli"}), 400
+    c = crm.get_contact(u)
+    if not c:
+        return jsonify({"ok": False, "error": "Kisi bulunamadi."}), 404
+    if not STATE["accounts"]:
+        return jsonify({"ok": False, "error": "Once email hesabi ekle."}), 400
+    res = emailer.send_one(_email_cfg(), c)
+    code = 200 if res.get("ok") else 400
+    return jsonify(res), code
+
 @app.route("/api/db/update", methods=["POST"])
 def api_update():
     d = request.get_json(force=True) or {}
@@ -547,21 +522,29 @@ def bootstrap_from_env():
             STATE["accounts"] = _accounts_from(json.loads(raw))
         except Exception:
             pass
-    for p in ("secrets.local.json", os.path.join(os.environ.get("DATA_DIR", "."), "secrets.local.json")):
-        if not os.path.exists(p):
-            continue
-        try:
-            with open(p, "r", encoding="utf-8") as f:
-                d = json.load(f)
-        except Exception:
-            break
-        if not STATE["apify_tokens"]:
-            STATE["apify_tokens"] = _norm_list(d.get("apify_tokens"))
-        if not STATE["groq_keys"]:
-            STATE["groq_keys"] = _norm_list(d.get("groq_keys"))
-        if not STATE["accounts"] and d.get("email_accounts"):
-            STATE["accounts"] = _accounts_from(d.get("email_accounts"))
-        break
+    d = _load_secrets_file()
+    if not STATE["apify_tokens"]:
+        STATE["apify_tokens"] = _norm_list(d.get("apify_tokens"))
+    if not STATE["groq_keys"]:
+        STATE["groq_keys"] = _norm_list(d.get("groq_keys"))
+    if not STATE["accounts"] and d.get("email_accounts"):
+        STATE["accounts"] = _accounts_from(d.get("email_accounts"))
+
+def _targeting_config():
+    d = _load_secrets_file()
+    tg = d.get("targeting") or {}
+    def pick(env, key, default):
+        v = os.environ.get(env)
+        return v if v not in (None, "") else tg.get(key, default)
+    return {
+        "hashtags": _norm_list(pick("HASHTAGS", "hashtags", "")),
+        "countries": _norm_list(pick("COUNTRIES", "countries", "")),
+        "min_followers": int(pick("MIN_FOLLOWERS", "min_followers", 3000) or 3000),
+        "max_followers": int(pick("MAX_FOLLOWERS", "max_followers", 80000) or 80000),
+        "target_count": PER_COMBO_TARGET,
+        "require_email": True,
+        "strict_country": os.environ.get("STRICT_COUNTRY", "1") == "1",
+    }
 
 bootstrap_from_env()
 _start_monitor()
@@ -574,5 +557,5 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     host = os.environ.get("HOST", "127.0.0.1")
     debug = os.environ.get("FLASK_DEBUG") == "1"
-    print(f"\n CaptionAI Finder -> http://{host}:{port}   (kurulum: /setup  \u00b7  checker: /checker)\n")
+    print(f"\n CaptionAI Finder -> http://{host}:{port}   (checker: /checker)\n")
     app.run(debug=debug, host=host, port=port)
