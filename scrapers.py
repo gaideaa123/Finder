@@ -14,7 +14,8 @@ Uclar (docs.scrapecreators.com):
 Auth: header x-api-key. Rate limit yok (500 es zamanli altinda kal).
 """
 
-import time
+import json
+import os
 from typing import Dict, List, Optional, Set
 
 import requests
@@ -28,6 +29,8 @@ from finder import (
     load_history,
     add_to_history,
     _resolve_platforms,
+    _read_panel_secrets,
+    _as_list,
 )
 
 BASE = "https://api.scrapecreators.com"
@@ -38,6 +41,11 @@ def _keys(cfg: dict) -> List[str]:
     keys = cfg.get("scrapecreators_keys") or (
         [cfg.get("scrapecreators_key")] if cfg.get("scrapecreators_key") else []
     )
+    # Panel/env fallback: secrets.local.json -> SCRAPECREATORS_KEYS
+    if not keys:
+        sec = _read_panel_secrets()
+        keys = sec.get("scrapecreators_keys") or os.environ.get("SCRAPECREATORS_KEYS") or []
+        keys = _as_list(keys)
     return [str(k).strip() for k in keys if k and "YAPISTIR" not in str(k)]
 
 
