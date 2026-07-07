@@ -3,14 +3,11 @@ CaptionAI Finder - Cok Hesapli Otomatik Email Gonderici
 =======================================================
 
 accounts: [{email, password(app pw), from_name}, ...]
-Her hesap gunde daily_limit (30) kadar atar; dolunca sonraki hesaba gecer.
-Hepsi dolunca durur. Ayni email adresine ikinci kez atmaz.
+Her hesap gunde daily_limit kadar atar; dolunca sonraki hesaba gecer.
+Ayni email adresine ikinci kez atmaz.
 
-Govde: kisinin CRM'de kayitli hazir mesaji varsa onu kullanir (Groq'u tekrar
-cagirmaz -> hizli + az kota). Yoksa build_body ile uretir.
-
-Gmail icin uygulama sifresi gerekir (normal sifre degil):
-  myaccount.google.com/apppasswords
+Govde: kisinin CRM'de kayitli hazir mesaji varsa onu kullanir; yoksa build_body.
+Konu: build_subject(kisi) ile KISIYE OZEL uretilir; yoksa sabit subject.
 """
 
 import random
@@ -19,7 +16,7 @@ import threading
 import time
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Optional
 
 import crm
 
@@ -32,7 +29,6 @@ SMTP_PRESETS = {
 _state = {
     "running": False, "sent": 0, "failed": 0, "total": 0,
     "last": "", "error": "", "stopped": False, "active_account": "",
-    "accounts_status": [],
 }
 _lock = threading.Lock()
 
@@ -59,16 +55,25 @@ def _send(server, from_addr, from_name, to_addr, subject, body) -> None:
     msg.attach(MIMEText(body, "plain", "utf-8"))
     server.sendmail(from_addr, [to_addr], msg.as_string())
 
+def _subject_for(cfg, c) -> str:
+    build_subject: Optional[Callable[[dict], str]] = cfg.get("build_subject")
+    if build_subject:
+        try:
+            s = (build_subject(c) or "").strip()
+            if s:
+                return s
+        except Exception:
+            pass
+    return cfg.get("subject", "videolarin icin ufak bir sey")
+
 def _run(cfg: dict) -> None:
     provider = cfg.get("provider", "gmail")
     accounts: List[dict] = cfg.get("accounts", [])
-    subject = cfg.get("subject", "videolarin icin ufak bir sey")
     daily_limit = int(cfg.get("daily_limit", 30))
     min_delay = float(cfg.get("min_delay", 25))
     max_delay = float(cfg.get("max_delay", 90))
     build_body: Callable[[dict], str] = cfg["build_body"]
 
-    # Gonderilecek kuyruk (email'li, henuz gonderilmemis). Ayni email'e iki kez atma.
     seen_emails = set()
     queue = []
     for c in crm.email_queue(limit=5000):
@@ -103,23 +108,18 @@ def _run(cfg: dict) -> None:
         from_name = acc.get("from_name", "")
         if not user or not pw:
             continue
-
-        # Bu hesabin bugun kalan kotasi
         already = crm.sent_today_account(user)
         remaining = max(0, daily_limit - already)
         if remaining <= 0:
-            continue  # bu hesap bugun dolu, sonrakine gec
-
+            continue
         with _lock:
             _state["active_account"] = user
-
         try:
             server = _smtp_login(provider, user, pw)
         except Exception as e:  # noqa: BLE001
             with _lock:
                 _state["error"] = f"{user} giris hatasi: {e}"
-            continue  # bu hesap girilemedi, sonrakine gec
-
+            continue
         try:
             sent_this_acc = 0
             while qi < len(queue) and sent_this_acc < remaining:
@@ -128,8 +128,8 @@ def _run(cfg: dict) -> None:
                         break
                 c = queue[qi]
                 qi += 1
-                # Hazir govde varsa onu kullan (Groq'u tekrar cagirma); yoksa uret.
                 body = (c.get("message") or "").strip() or build_body(c)
+                subject = _subject_for(cfg, c)
                 try:
                     _send(server, user, from_name, c["email"], subject, body)
                     crm.set_message(c["username"], body)
@@ -148,12 +148,49 @@ def _run(cfg: dict) -> None:
                 server.quit()
             except Exception:
                 pass
-
         if qi >= len(queue):
-            break  # kuyruk bitti
+            break
 
     with _lock:
         _state["running"] = False
+
+def send_one(cfg: dict, contact: dict) -> dict:
+    """Tek bir kisiye hemen email atar (panel 'Gonder' butonu icin). Senkron."""
+    accounts = cfg.get("accounts") or []
+    to = (contact.get("email") or "").strip()
+    if not to:
+        return {"ok": False, "error": "Bu kisinin email'i yok."}
+    if not accounts:
+        return {"ok": False, "error": "Email hesabi yok."}
+    provider = cfg.get("provider", "gmail")
+    build_body = cfg.get("build_body")
+    body = (contact.get("message") or "").strip() or (build_body(contact) if build_body else "")
+    subject = _subject_for(cfg, contact)
+    daily_limit = int(cfg.get("daily_limit", 30))
+    for acc in accounts:
+        user = (acc.get("email") or "").strip()
+        pw = (acc.get("password") or "").strip()
+        if not user or not pw:
+            continue
+        if crm.sent_today_account(user) >= daily_limit:
+            continue
+        try:
+            server = _smtp_login(provider, user, pw)
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "error": f"{user} giris hatasi: {str(e)[:120]}"}
+        try:
+            _send(server, user, acc.get("from_name", ""), to, subject, body)
+            crm.set_message(contact["username"], body)
+            crm.mark_sent(contact["username"], channel="email", account=user)
+            return {"ok": True, "account": user}
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "error": str(e)[:160]}
+        finally:
+            try:
+                server.quit()
+            except Exception:
+                pass
+    return {"ok": False, "error": "Tum hesaplarin gunluk limiti dolu."}
 
 def start_email_campaign(cfg: dict) -> dict:
     with _lock:
