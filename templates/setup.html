@@ -29,6 +29,8 @@
   .btn:disabled { opacity:.5; cursor:not-allowed; }
   .btn.secondary { background:var(--panel-2); border:1px solid var(--border); }
   .btn.small { padding:9px 13px; font-size:13px; }
+  .btn.big { width:100%; justify-content:center; font-size:16px; padding:16px; }
+  .btn.stop { background:var(--red); }
   .acct { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; align-items:center; }
   .acct input { flex:1; min-width:120px; }
   .acct .x { cursor:pointer; color:var(--muted); padding:6px 10px; border:1px solid var(--border); border-radius:9px; background:var(--panel-2); }
@@ -39,27 +41,27 @@
   th { color:var(--muted); font-weight:600; }
   .pill { font-size:11px; padding:2px 8px; border-radius:999px; border:1px solid var(--border); }
   .pill.ok { color:var(--green); } .pill.bad { color:var(--red); } .pill.warn { color:var(--amber); }
-  ol.guide { margin:6px 0 0; padding-left:20px; font-size:13px; line-height:1.9; }
-  ol.guide a { color:var(--accent); }
-  .cmd { position:relative; background:#07070d; border:1px solid var(--border); border-radius:10px; padding:12px 44px 12px 12px; font-family:ui-monospace,monospace; font-size:12px; color:#cfe9d4; white-space:pre-wrap; margin-top:10px; }
-  .cmd .copy { position:absolute; top:8px; right:8px; cursor:pointer; border:1px solid var(--border); background:var(--panel-2); color:var(--muted); border-radius:8px; padding:4px 8px; font-size:11px; }
   .row.gap { align-items:center; gap:10px; }
   code { background:var(--panel-2); padding:1px 6px; border-radius:6px; font-size:12px; }
   .warnbox { background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.35); color:#f7d488; border-radius:12px; padding:12px 14px; font-size:12px; line-height:1.6; margin:14px 0; }
+  .live { background:#07070d; border:1px solid var(--border); border-radius:12px; padding:14px; font-family:ui-monospace,monospace; font-size:12px; line-height:1.6; color:#cfe9d4; margin-top:12px; min-height:60px; }
+  .dotlive { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; }
+  .dotlive.on { background:var(--green); box-shadow:0 0 8px var(--green); }
+  .dotlive.off { background:var(--muted); }
+  .kpi { display:inline-block; margin-right:16px; }
+  .kpi b { color:var(--accent); }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1><span class="dot">🧠</span> CaptionAI Kurulum</h1>
-  <p class="sub">Anahtarlari yapistir → test et → kaydet. Sonra Oracle Cloud'da 7/24 (ücretsiz) calistir. <a href="/checker" style="color:var(--accent)">Checker</a> · <a href="/" style="color:var(--accent)">Panel</a></p>
+  <p class="sub">Anahtarlari yapistir → test et → <b>Başlat</b>. Hiçbir dosyaya dokunmadan. <a href="/checker" style="color:var(--accent)">Checker</a> · <a href="/" style="color:var(--accent)">Panel</a></p>
   <div class="steps">
     <span class="step"><b>1</b> Anahtarlar</span>
     <span class="step"><b>2</b> Hedefleme</span>
-    <span class="step"><b>3</b> Kaydet & Test</span>
-    <span class="step"><b>4</b> Oracle'da 7/24</span>
+    <span class="step"><b>3</b> Kaydet</span>
+    <span class="step"><b>4</b> Başlat</span>
   </div>
-
-  <div class="warnbox">⚠️ Bu sayfa yalniz kendi bilgisayarinda calisir ve anahtarlarini <code>secrets.local.json</code>'a yazar (repoya gitmez). O dosyayi Oracle sunucuna kopyalayip 7/24 calistiracaksin (asagida).</div>
 
   <div class="card">
     <h2><span class="num">1</span>Anahtarlar</h2>
@@ -72,7 +74,7 @@
 
   <div class="card">
     <h2><span class="num">2</span>Email hesapları & Hedefleme</h2>
-    <p class="hint">Gmail + <b>uygulama şifresi</b> (normal şifre değil): <a href="https://myaccount.google.com/apppasswords" target="_blank" style="color:var(--accent)">apppasswords</a>. Her hesap günlük limite kadar atar, dolunca sıradakine geçer.</p>
+    <p class="hint">Gmail + <b>uygulama şifresi</b>: <a href="https://myaccount.google.com/apppasswords" target="_blank" style="color:var(--accent)">apppasswords</a>. Her hesap günlük limite kadar atar, dolunca sıradakine geçer.</p>
     <div id="accts"></div>
     <div class="row gap" style="margin-top:10px"><button class="btn secondary" onclick="addAcct()">+ Hesap ekle</button></div>
     <div class="row" style="margin-top:16px">
@@ -92,44 +94,44 @@
       <div><label>Kombo başı hedef</label><input id="t_target" placeholder="60" value="60"></div>
       <div><label>Günlük email/hesap</label><input id="t_daily" placeholder="30"></div>
     </div>
-    <p class="hint">Not: her hashtag icin ayri ayri <b>60 kişi</b> taranir; bir Apify anahtari bitince otomatik diğerine geçer.</p>
+    <p class="hint">Her hashtag icin ayri ayri <b>60 kişi</b> taranir; bir Apify anahtari bitince otomatik diğerine geçer.</p>
   </div>
 
   <div class="card">
     <h2><span class="num">3</span>Kaydet & Test</h2>
-    <p class="hint">Önce kaydet, sonra anahtarları canlı test et (Apify bakiye + Groq limit).</p>
     <div class="row gap">
       <button class="btn" onclick="save()">💾 Kaydet</button>
-      <button class="btn secondary" onclick="check()">🔍 Test et</button>
+      <button class="btn secondary" onclick="check()">🔍 Anahtarlari test et</button>
     </div>
     <div id="saveStatus" class="status"></div>
-    <div id="savePath" class="status"></div>
     <div id="checkOut"></div>
   </div>
 
   <div class="card">
-    <h2><span class="num">4</span>Oracle Cloud'da 7/24 (ücretsiz)</h2>
-    <p class="hint">Kart doğrulaması var ama <b>ücret alınmaz</b> (Always Free). Adımlar:</p>
-    <ol class="guide">
-      <li><a href="https://signup.oraclecloud.com" target="_blank">signup.oraclecloud.com</a> → hesap aç.</li>
-      <li>Console → <b>Compute → Instances → Create</b>. Image: <b>Ubuntu</b>. Shape: <b>VM.Standard.A1.Flex</b> (Always Free). SSH key'i indir.</li>
-      <li>VCN → <b>Security Lists → Default → Add Ingress</b>: 0.0.0.0/0, TCP, port <b>8080</b>.</li>
-      <li>VM'e SSH bağlan, sonra aşağıdaki komutu yapıştır:</li>
-    </ol>
-    <div class="cmd" id="cmd">git clone https://github.com/gaideaa123/Finder.git
-cd Finder && chmod +x install-oracle.sh && ./install-oracle.sh<span class="copy" onclick="copyCmd()">kopyala</span></div>
-    <ol class="guide" start="5">
-      <li>Bu bilgisayardaki <code id="scp">secrets.local.json</code>'ı VM'e kopyala (Kaydet'e bastıktan sonra oluşur):
-        <div class="cmd" id="scpcmd">scp -i ~/Downloads/ssh-key-*.key secrets.local.json ubuntu@VM_IP:~/Finder/<span class="copy" onclick="copyScp()">kopyala</span></div>
-      </li>
-      <li>VM'de: <code>sudo systemctl restart captionai</code> → bitti. Panel: <code>http://VM_IP:8080</code></li>
-    </ol>
-    <p class="hint">Detayli rehber repo'da <a href="https://github.com/gaideaa123/Finder/blob/main/ORACLE.md" target="_blank">ORACLE.md</a>.</p>
+    <h2><span class="num">4</span>Otomasyonu başlat</h2>
+    <p class="hint">Kaydettikten sonra tek tus. Bul → email çıkar → Groq ile yaz → gönder → tekrar. 7/24.</p>
+    <div class="row gap">
+      <button class="btn big" id="startBtn" onclick="startAuto()">▶️ Başlat</button>
+      <button class="btn stop small" id="stopBtn" onclick="stopAuto()">⏹ Durdur</button>
+    </div>
+    <div id="ctrlStatus" class="status"></div>
+    <div class="live" id="live"><span class="dotlive off"></span>Durum bekleniyor...</div>
   </div>
 </div>
 
 <script>
   function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+  let PW = sessionStorage.getItem('setup_pw') || '';
+  function wpw(url){ return PW ? (url + (url.includes('?')?'&':'?') + 'pw=' + encodeURIComponent(PW)) : url; }
+  async function api(url, opts){
+    let r = await fetch(wpw(url), opts);
+    if(r.status===403){
+      const p = prompt('Setup sifresi (install-oracle.sh sonunda yazdi):');
+      if(p!==null){ PW=p; sessionStorage.setItem('setup_pw',PW); r = await fetch(wpw(url), opts); }
+    }
+    return r;
+  }
+
   const accts=[];
   function renderAccts(){
     document.getElementById('accts').innerHTML = accts.map((a,i)=>
@@ -142,7 +144,7 @@ cd Finder && chmod +x install-oracle.sh && ./install-oracle.sh<span class="copy"
   function delAcct(i){ accts.splice(i,1); renderAccts(); }
 
   async function load(){
-    const r=await fetch('/api/setup/load'); const d=await r.json();
+    const r=await api('/api/setup/load'); if(!r.ok) return; const d=await r.json();
     if(d.apify_masked&&d.apify_masked.length) document.getElementById('apifyHave').textContent='(kayıtlı: '+d.apify_masked.join(', ')+')';
     if(d.groq_masked&&d.groq_masked.length) document.getElementById('groqHave').textContent='(kayıtlı: '+d.groq_masked.join(', ')+')';
     (d.accounts||[]).forEach(a=>accts.push({email:a.email||'',password:'',from_name:a.from_name||''}));
@@ -173,35 +175,33 @@ cd Finder && chmod +x install-oracle.sh && ./install-oracle.sh<span class="copy"
     setS('saveStatus','Kaydediliyor...');
     const body={ apify_tokens:document.getElementById('apify').value, groq_keys:document.getElementById('groq').value,
       email_accounts:accts.filter(a=>a.email&&a.password), targeting:targeting() };
-    const r=await fetch('/api/setup/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const r=await api('/api/setup/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const d=await r.json();
     if(d.ok){ setS('saveStatus','Kaydedildi ✅  Apify:'+d.apify+' · Groq:'+d.groq+' · Hesap:'+d.accounts,'ok');
-      if(d.path) setS('savePath','Dosya: '+d.path);
       document.getElementById('apify').value=''; document.getElementById('groq').value=''; load(); return true; }
     setS('saveStatus','Hata: '+(d.error||'?'),'err'); return false;
   }
 
   async function genHashtags(){
     const btn=document.getElementById('htBtn'); btn.disabled=true;
-    setS('htStatus','Önce anahtarlar kaydediliyor...');
-    await save();
+    setS('htStatus','Önce anahtarlar kaydediliyor...'); await save();
     setS('htStatus','AI hashtag üretiyor...');
     const body={ lang:(document.getElementById('t_lang').value.trim()||'tr'),
       countries:document.getElementById('t_countries').value.split(',').map(s=>s.trim()).filter(Boolean),
       niche:document.getElementById('t_niche').value.trim(), count:14 };
     try{
-      const r=await fetch('/api/setup/hashtags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const r=await api('/api/setup/hashtags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       const d=await r.json();
       if(!d.ok){ setS('htStatus','Hata: '+(d.error||'?'),'err'); btn.disabled=false; return; }
       document.getElementById('t_hashtags').value=(d.hashtags||[]).join(', ');
-      setS('htStatus',(d.hashtags||[]).length+' hashtag üretildi ✅ (kaydetmeyi unutma)','ok');
+      setS('htStatus',(d.hashtags||[]).length+' hashtag üretildi ✅ (Kaydet\'e bas)','ok');
     }catch(e){ setS('htStatus','Hata: '+e.message,'err'); }
     btn.disabled=false;
   }
 
   async function check(){
     setS('saveStatus','Test ediliyor (birkaç saniye)...');
-    const r=await fetch('/api/setup/check'); const d=await r.json();
+    const r=await api('/api/setup/check'); const d=await r.json();
     if(!d.ok){ setS('saveStatus','Hata: '+(d.error||'?'),'err'); return; }
     setS('saveStatus','Test tamam.','ok');
     let h='<table><tr><th>Apify</th><th>Plan</th><th>Kullanıldı</th><th>Kalan</th></tr>';
@@ -212,10 +212,39 @@ cd Finder && chmod +x install-oracle.sh && ./install-oracle.sh<span class="copy"
     document.getElementById('checkOut').innerHTML=h;
   }
 
-  function copyCmd(){ navigator.clipboard.writeText('git clone https://github.com/gaideaa123/Finder.git\ncd Finder && chmod +x install-oracle.sh && ./install-oracle.sh'); }
-  function copyScp(){ navigator.clipboard.writeText('scp -i ~/Downloads/ssh-key-*.key secrets.local.json ubuntu@VM_IP:~/Finder/'); }
+  async function startAuto(){
+    const btn=document.getElementById('startBtn'); btn.disabled=true;
+    setS('ctrlStatus','Önce kaydediliyor...'); await save();
+    setS('ctrlStatus','Başlatılıyor...');
+    const r=await api('/api/control/start',{method:'POST'});
+    const d=await r.json();
+    if(!d.ok){ setS('ctrlStatus','Hata: '+(d.error||'?'),'err'); btn.disabled=false; return; }
+    setS('ctrlStatus','Başladı 🚀','ok'); btn.disabled=false;
+  }
+  async function stopAuto(){
+    const r=await api('/api/control/stop',{method:'POST'}); await r.json();
+    setS('ctrlStatus','Durduruldu.');
+  }
+
+  async function pollStatus(){
+    try{
+      const r=await api('/api/control/status'); if(r.status===403){ return; }
+      const d=await r.json(); if(!d.ok) return;
+      const a=d.auto||{}, e=d.email||{}, k=d.keys||{};
+      const on=a.running;
+      let h='<span class="dotlive '+(on?'on':'off')+'"></span><b>'+(on?'Çalışıyor':'Durdu')+'</b>  ';
+      h+='<span class="kpi">Anahtar: <b>'+(k.apify||0)+'</b> apify · <b>'+(k.groq||0)+'</b> groq · <b>'+(k.accounts||0)+'</b> mail</span><br>';
+      h+='<span class="kpi">Tur: <b>'+(a.rounds||0)+'</b></span>';
+      h+='<span class="kpi">Bulunan: <b>'+(a.found||0)+'</b></span>';
+      if(a.combo) h+='<span class="kpi">Hashtag: <b>'+esc(a.combo)+'</b></span>';
+      if(e && e.running) h+='<span class="kpi">Email: <b>'+(e.sent||0)+'/'+(e.total||0)+'</b>'+(e.active_account?' ('+esc(e.active_account)+')':'')+'</span>';
+      if(a.last) h+='<br><span style="color:var(--muted)">'+esc(a.last)+'</span>';
+      document.getElementById('live').innerHTML=h;
+    }catch(e){}
+  }
 
   load();
+  pollStatus(); setInterval(pollStatus, 4000);
 </script>
 </body>
 </html>

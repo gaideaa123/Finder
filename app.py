@@ -5,10 +5,9 @@ hiper-ozel EMAIL uretir -> otomatik gonderir. DM GONDERMEZ. Ayni kisiyi tekrar
 getirmez (CRM dedup + arama sirasinda eleme).
 
 Max performans: HER hashtag kombinasyonu icin hedef 60 kisi taranir; bir Apify
-token/kota bitince otomatik digerine gecer. Anahtarlar arka planda SUREKLI
-kontrol edilir (monitor).
+token/kota bitince otomatik digerine gecer. Anahtarlar arka planda SUREKLI kontrol edilir.
 
-Sayfalar:  /  panel  ·  /checker bakiye  ·  /setup kurulum GUI (local)
+Sayfalar:  /  panel  ·  /checker bakiye  ·  /setup kurulum GUI (anahtar gir + baslat)
 """
 
 import json
@@ -30,7 +29,6 @@ except Exception:
 app = Flask(__name__)
 crm.init_db()
 
-# Ek sayfalar: checker (bakiye) + setup (kurulum GUI)
 for _mod, _bp in (("checker", "checker_bp"), ("setup", "setup_bp")):
     try:
         _m = __import__(_mod)
@@ -39,8 +37,6 @@ for _mod, _bp in (("checker", "checker_bp"), ("setup", "setup_bp")):
         pass
 
 SITE_URL = os.environ.get("SITE_URL", "thecaptionai.com")
-
-# Kombinasyon basina hedef (istenen: her hashtag kombosu icin 60 kisi)
 PER_COMBO_TARGET = int(os.environ.get("PER_COMBO_TARGET", 60))
 
 STATE = {
@@ -51,7 +47,6 @@ STATE = {
     "monitor": {"ts": 0, "apify": [], "groq": []},
 }
 
-# Auto dongusunu ayni anda iki kez baslatmayi engeller.
 _auto_lock = threading.Lock()
 _monitor_started = False
 
@@ -114,7 +109,6 @@ def _run_search(data):
         "require_email": bool(data.get("require_email", True)),
         "strict_country": bool(data.get("strict_country", True)),
         "skip_seen": False,
-        # TEKRAR BUG FIX: CRM'de olanlari arama sirasinda ele -> her tur yeni kisi.
         "exclude_usernames": crm.known_usernames(),
         "exclude_emails": crm.known_emails(),
     }
@@ -125,7 +119,7 @@ def _run_search(data):
         except Exception as e:  # noqa: BLE001
             last = str(e)
             if any(k in last.lower() for k in ["401", "402", "403", "quota", "payment", "insufficient", "unauthorized", "token"]):
-                continue  # bu token bitti -> sonraki token
+                continue
             break
     return None, last or "Tum Apify token'lar tukendi", True
 
@@ -191,18 +185,14 @@ def api_keys():
 
 @app.route("/api/hashtags/suggest", methods=["POST"])
 def api_hashtags():
-    """Groq ile nis/dil/ulkeye gore hashtag uretir."""
     data = request.get_json(force=True) or {}
     b = _brain()
     if not b:
         return jsonify({"ok": False, "error": "Once Groq key ekle."}), 400
     try:
         tags = b.generate_hashtags(
-            lang=data.get("lang", "tr"),
-            countries=data.get("countries") or [],
-            niche_hint=data.get("niche", ""),
-            count=int(data.get("count", 12)),
-        )
+            lang=data.get("lang", "tr"), countries=data.get("countries") or [],
+            niche_hint=data.get("niche", ""), count=int(data.get("count", 12)))
         return jsonify({"ok": True, "hashtags": tags})
     except QuotaError:
         return jsonify({"ok": False, "error": "Groq kotasi bitti."}), 429
@@ -240,8 +230,6 @@ def _start_email():
     })
 
 def _combos_from(hashtags):
-    """Her hashtag'i ayri bir kombinasyon yapar (istenen: kombo basina 60 kisi).
-    HASHTAG_COMBO_SIZE>1 verilirse hashtag'leri gruplar halinde tarar."""
     hs = [h for h in (hashtags or []) if h]
     size = int(os.environ.get("HASHTAG_COMBO_SIZE", 1))
     if size <= 1:
@@ -260,13 +248,11 @@ def _auto_loop(data):
                 if STATE["auto"]["stop"]:
                     break
                 STATE["auto"]["combo"] = ",".join(combo) if combo else "(hepsi)"
-                # Her kombinasyon icin hedef 60
                 d2 = dict(data, hashtags=combo, target_count=PER_COMBO_TARGET)
                 rows, err, _ = _run_search(d2)
                 if rows is None:
                     STATE["auto"]["last"] = "Apify: " + (err or "hata")
                     if any(k in (err or "").lower() for k in ["token yok", "tukendi"]):
-                        # tum tokenlar bitti -> donguden cik
                         raise RuntimeError(err or "apify bitti")
                     continue
                 fresh = _finalize(rows, countries)
@@ -324,7 +310,85 @@ def api_auto_stop():
     stop_campaign()
     return jsonify({"ok": True})
 
-# ---- Sürekli monitor (anahtarlari arka planda periyodik kontrol eder) ----
+# ---- GUI kontrol (setup sayfasindan Baslat/Durdur) -----------------------
+
+def _ctrl_ok():
+    ra = (request.remote_addr or "").strip()
+    if ra in ("127.0.0.1", "::1", "localhost", ""):
+        return True
+    if os.environ.get("ALLOW_SETUP") != "1":
+        return False
+    pw = os.environ.get("SETUP_PASSWORD")
+    if not pw:
+        return True
+    return (request.headers.get("X-Setup-Password") or request.args.get("pw")) == pw
+
+def _targeting_config():
+    """secrets.local.json targeting + env'den auto config uretir."""
+    tg = {}
+    for p in ("secrets.local.json", os.path.join(os.environ.get("DATA_DIR", "."), "secrets.local.json")):
+        if os.path.exists(p):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    tg = (json.load(f) or {}).get("targeting") or {}
+            except Exception:
+                tg = {}
+            break
+    def pick(env, key, default):
+        v = os.environ.get(env)
+        return v if v not in (None, "") else tg.get(key, default)
+    return {
+        "hashtags": _norm_list(pick("HASHTAGS", "hashtags", "")),
+        "countries": _norm_list(pick("COUNTRIES", "countries", "")),
+        "min_followers": int(pick("MIN_FOLLOWERS", "min_followers", 3000) or 3000),
+        "max_followers": int(pick("MAX_FOLLOWERS", "max_followers", 80000) or 80000),
+        "target_count": PER_COMBO_TARGET,
+        "require_email": True,
+        "strict_country": os.environ.get("STRICT_COUNTRY", "1") == "1",
+    }
+
+@app.route("/api/control/status")
+def api_control_status():
+    if not _ctrl_ok():
+        return jsonify({"ok": False, "error": "auth"}), 403
+    return jsonify({"ok": True, "auto": STATE["auto"], "email": email_status(),
+                    "keys": {"apify": len(STATE["apify_tokens"]), "groq": len(STATE["groq_keys"]),
+                             "accounts": len(STATE["accounts"])}})
+
+@app.route("/api/control/reload", methods=["POST"])
+def api_control_reload():
+    if not _ctrl_ok():
+        return jsonify({"ok": False, "error": "auth"}), 403
+    bootstrap_from_env()
+    return jsonify({"ok": True, "apify": len(STATE["apify_tokens"]),
+                    "groq": len(STATE["groq_keys"]), "accounts": len(STATE["accounts"])})
+
+@app.route("/api/control/start", methods=["POST"])
+def api_control_start():
+    if not _ctrl_ok():
+        return jsonify({"ok": False, "error": "auth"}), 403
+    bootstrap_from_env()  # dosyadan en guncel anahtar + hesaplari yukle
+    if not STATE["apify_tokens"]:
+        return jsonify({"ok": False, "error": "Apify token yok. Once kaydet."}), 400
+    if not STATE["groq_keys"]:
+        return jsonify({"ok": False, "error": "Groq key yok. Once kaydet."}), 400
+    if not STATE["accounts"]:
+        return jsonify({"ok": False, "error": "Email hesabi yok. Once ekle."}), 400
+    cfg = _targeting_config()
+    if not cfg["hashtags"]:
+        return jsonify({"ok": False, "error": "Hashtag yok. Hedeflemeyi doldur (AI ile uretebilirsin)."}), 400
+    started = _spawn_auto(cfg)
+    return jsonify({"ok": True, "started": started, "running": STATE["auto"]["running"]})
+
+@app.route("/api/control/stop", methods=["POST"])
+def api_control_stop():
+    if not _ctrl_ok():
+        return jsonify({"ok": False, "error": "auth"}), 403
+    STATE["auto"]["stop"] = True
+    stop_campaign()
+    return jsonify({"ok": True})
+
+# ---- Surekli monitor -----------------------------------------------------
 
 def _monitor_tick():
     try:
@@ -338,7 +402,7 @@ def _monitor_tick():
     }
 
 def _monitor_loop():
-    interval = int(os.environ.get("MONITOR_INTERVAL", 900))  # 15 dk
+    interval = int(os.environ.get("MONITOR_INTERVAL", 900))
     while True:
         if STATE["apify_tokens"] or STATE["groq_keys"]:
             try:
@@ -357,22 +421,12 @@ def _start_monitor():
 @app.route("/api/monitor/status")
 def api_monitor_status():
     m = STATE["monitor"]
-    # Hic tarama olmadiysa aninda bir kez tara
     if not m.get("ts") and (STATE["apify_tokens"] or STATE["groq_keys"]):
         try:
-            _monitor_tick()
-            m = STATE["monitor"]
+            _monitor_tick(); m = STATE["monitor"]
         except Exception:
             pass
     return jsonify({"ok": True, "monitor": m})
-
-@app.route("/api/monitor/refresh", methods=["POST"])
-def api_monitor_refresh():
-    try:
-        _monitor_tick()
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"ok": False, "error": str(e)[:150]}), 500
-    return jsonify({"ok": True, "monitor": STATE["monitor"]})
 
 @app.route("/api/queue")
 def api_queue():
@@ -466,7 +520,7 @@ def api_email_stop():
     stop_campaign()
     return jsonify({"ok": True})
 
-# ---- Server / env bootstrap (PC'siz 7/24 calisma icin) ------------------
+# ---- bootstrap ----------------------------------------------------------
 
 def _split(v):
     return [t.strip() for t in (v or "").replace("\n", ",").split(",") if t.strip()]
@@ -485,7 +539,6 @@ def _accounts_from(items):
     return out
 
 def bootstrap_from_env():
-    """Anahtarlari + email hesaplarini once env'den, sonra secrets.local.json'dan yukler."""
     STATE["apify_tokens"] = _split(os.environ.get("APIFY_TOKENS", ""))
     STATE["groq_keys"] = _split(os.environ.get("GROQ_KEYS", ""))
     raw = os.environ.get("EMAIL_ACCOUNTS", "").strip()
@@ -510,35 +563,10 @@ def bootstrap_from_env():
             STATE["accounts"] = _accounts_from(d.get("email_accounts"))
         break
 
-def _env_autostart_config():
-    tg = {}
-    for p in ("secrets.local.json", os.path.join(os.environ.get("DATA_DIR", "."), "secrets.local.json")):
-        if os.path.exists(p):
-            try:
-                with open(p, "r", encoding="utf-8") as f:
-                    tg = (json.load(f) or {}).get("targeting") or {}
-            except Exception:
-                tg = {}
-            break
-    def pick(env, key, default):
-        v = os.environ.get(env)
-        if v not in (None, ""):
-            return v
-        return tg.get(key, default)
-    return {
-        "hashtags": _norm_list(pick("HASHTAGS", "hashtags", "")),
-        "countries": _norm_list(pick("COUNTRIES", "countries", "")),
-        "min_followers": int(pick("MIN_FOLLOWERS", "min_followers", 3000) or 3000),
-        "max_followers": int(pick("MAX_FOLLOWERS", "max_followers", 80000) or 80000),
-        "target_count": PER_COMBO_TARGET,
-        "require_email": os.environ.get("REQUIRE_EMAIL", "1") == "1",
-        "strict_country": os.environ.get("STRICT_COUNTRY", "1") == "1",
-    }
-
 bootstrap_from_env()
 _start_monitor()
 if os.environ.get("AUTOSTART") == "1":
-    cfg = _env_autostart_config()
+    cfg = _targeting_config()
     if cfg["hashtags"] and STATE["apify_tokens"]:
         _spawn_auto(cfg)
 
