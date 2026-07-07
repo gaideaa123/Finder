@@ -9,14 +9,20 @@ Acilis: `python app.py` -> http://127.0.0.1:5000/setup
 
 import json
 import os
+import shutil
 import subprocess
 
 from flask import Blueprint, Response, jsonify, render_template, request
 
 setup_bp = Blueprint("setup", __name__)
+
+# Repo koku = bu dosyanin bulundugu klasor. deploy.sh burada.
+REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
+DEPLOY_SH = os.path.join(REPO_ROOT, "deploy.sh")
+
 SECRETS_FILE = os.path.join(os.environ.get("DATA_DIR", "."), "secrets.local.json")
-if not os.path.exists(SECRETS_FILE) and os.path.exists("secrets.local.json"):
-    SECRETS_FILE = "secrets.local.json"
+if not os.path.exists(SECRETS_FILE) and os.path.exists(os.path.join(REPO_ROOT, "secrets.local.json")):
+    SECRETS_FILE = os.path.join(REPO_ROOT, "secrets.local.json")
 
 def _is_local() -> bool:
     ra = (request.remote_addr or "").strip()
@@ -49,6 +55,20 @@ def _read() -> dict:
         except Exception:
             return {}
     return {}
+
+def _find_bash():
+    """bash'i bulur. Windows'ta Git-Bash / WSL yollarini da dener."""
+    b = shutil.which("bash")
+    if b:
+        return b
+    for cand in (
+        r"C:\\Program Files\\Git\\bin\\bash.exe",
+        r"C:\\Program Files\\Git\\usr\\bin\\bash.exe",
+        r"C:\\Windows\\System32\\bash.exe",  # WSL
+    ):
+        if os.path.exists(cand):
+            return cand
+    return None
 
 @setup_bp.route("/setup")
 def setup_page():
@@ -84,7 +104,6 @@ def setup_save():
             accs.append({"email": e, "password": p, "from_name": (a.get("from_name") or "").strip()})
 
     out = {
-        # bos birakildiysa eskisini koru (maskeliyi geri yazmaya calisma)
         "apify_tokens": apify or existing.get("apify_tokens") or [],
         "groq_keys": groq or existing.get("groq_keys") or [],
         "email_accounts": accs or existing.get("email_accounts") or [],
@@ -116,30 +135,48 @@ def setup_check():
 
 @setup_bp.route("/api/setup/deploy")
 def setup_deploy():
-    """deploy.sh'i calistirir, ciktisini canli (SSE) akitir."""
+    """deploy.sh'i calistirir, ciktisini canli (SSE) akitir. Platformdan bagimsiz."""
     app_name = (request.args.get("app") or "captionai-finder").strip()
-    # basit isim dogrulamasi (komut enjeksiyonu olmasin)
     safe = "".join(ch for ch in app_name if ch.isalnum() or ch in "-_") or "captionai-finder"
 
+    def sse(msg):
+        return f"data: {msg}\n\n"
+
     def gen():
-        yield "data: Deploy basliyor...\n\n"
+        yield sse("Deploy hazirlaniyor...")
+        # 1) deploy.sh var mi?
+        if not os.path.exists(DEPLOY_SH):
+            yield sse(f"HATA: deploy.sh bulunamadi ({DEPLOY_SH}).")
+            yield sse("Once PR'i merge et ve repoyu guncelle (git pull), sonra tekrar dene.")
+            yield sse("[DONE]"); return
+        # 2) bash var mi?
+        bash = _find_bash()
+        if not bash:
+            yield sse("HATA: 'bash' bulunamadi (\"sistem belirtilen dosyayi bulamiyor\").")
+            yield sse("Windows'taysan: Git for Windows kur (git-scm.com) ya da WSL ac, deploy'u Git-Bash'ten calistir.")
+            yield sse("Alternatif: terminalde  bash deploy.sh  komutunu elle calistir.")
+            yield sse("[DONE]"); return
+        # 3) calistir
         try:
             proc = subprocess.Popen(
-                ["bash", "deploy.sh", safe],
+                [bash, DEPLOY_SH, safe],
+                cwd=REPO_ROOT,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 text=True, bufsize=1,
             )
+        except FileNotFoundError as e:
+            yield sse(f"HATA: calistirilamadi ({e}). 'bash deploy.sh {safe}' komutunu elle dene.")
+            yield sse("[DONE]"); return
         except Exception as e:  # noqa: BLE001
-            yield f"data: HATA: {e}\n\n"
-            yield "data: [DONE]\n\n"
-            return
+            yield sse(f"HATA: {e}")
+            yield sse("[DONE]"); return
         try:
             for line in iter(proc.stdout.readline, ""):
-                yield f"data: {line.rstrip()}\n\n"
+                yield sse(line.rstrip())
         finally:
             proc.wait()
-        yield f"data: [EXIT {proc.returncode}]\n\n"
-        yield "data: [DONE]\n\n"
+        yield sse(f"[EXIT {proc.returncode}]")
+        yield sse("[DONE]")
 
     return Response(gen(), mimetype="text/event-stream",
                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
