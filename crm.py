@@ -1,13 +1,20 @@
 """CaptionAI Finder - CRM (SQLite). Kuyruk, durum, email dedup, hesap takibi, DB yonetimi."""
 
+import os
 import sqlite3
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
-DB_FILE = "finder_crm.db"
+# DB yolu env'den; cloud'da kalici volume'e (or. /data/finder_crm.db) isaret eder.
+# Boylece restart'ta dedup + gonderim gecmisi silinmez -> ayni kisiler tekrar gelmez.
+DB_FILE = os.environ.get("DB_FILE", "finder_crm.db")
 
 def _conn():
-    # timeout: auto dongusu (arka plan thread) ve API istekleri ayni anda yazabilir;
+    # Klasor yoksa olustur (or. /data)
+    d = os.path.dirname(DB_FILE)
+    if d:
+        os.makedirs(d, exist_ok=True)
+    # timeout: arka plan autopilot ve (varsa) API istekleri ayni anda yazabilir;
     # kilit varsa 30sn bekle, aksi halde 'database is locked' hatasi firlar.
     c = sqlite3.connect(DB_FILE, timeout=30)
     c.row_factory = sqlite3.Row
