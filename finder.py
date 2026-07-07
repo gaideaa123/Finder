@@ -1,8 +1,4 @@
-"""CaptionAI Finder - Apify tabanli creator bulma (coklu token, 16GB, 6 dil).
-
-Email-only autopilot icin: cfg['exclude_usernames'] verilirse o kullanicilar
-toplama sirasinda atlanir -> her tur YENI kisiler doner (ayni kisiler gelmez).
-"""
+"""CaptionAI Finder - Apify tabanli creator bulma (coklu token, 16GB, 6 dil)."""
 
 import json
 import os
@@ -13,7 +9,8 @@ from typing import Dict, List, Optional, Set
 import requests
 
 APIFY_BASE = "https://api.apify.com/v2"
-HISTORY_FILE = "seen_history.json"
+# seen_history DATA_DIR altinda tutulur (server'da kalici volume).
+HISTORY_FILE = os.path.join(os.environ.get("DATA_DIR", "."), "seen_history.json")
 
 SUPPORTED_LANGS = ["tr", "en", "es", "de", "fr", "ar"]
 
@@ -30,7 +27,7 @@ COUNTRY_LANG = {
 LANG_MAIN_COUNTRY = {"tr": "TR", "en": "US", "es": "ES", "de": "DE", "fr": "FR", "ar": "SA"}
 
 COUNTRY_NAME_TO_ISO = {
-    "turkiye": "TR", "türkiye": "TR", "turkey": "TR", "tr": "TR",
+    "turkiye": "TR", "turkey": "TR", "tr": "TR", "t\u00fcrkiye": "TR",
     "amerika": "US", "abd": "US", "usa": "US", "united states": "US", "us": "US", "ingilizce": "US", "english": "US",
     "ingiltere": "GB", "uk": "GB", "united kingdom": "GB", "gb": "GB",
     "almanya": "DE", "germany": "DE", "de": "DE", "almanca": "DE", "deutsch": "DE",
@@ -46,9 +43,9 @@ COUNTRY_NAME_TO_ISO = {
     "misir": "EG", "egypt": "EG", "eg": "EG",
 }
 
-TURKISH_CHARS = set("ışğüöçİ")
-GERMAN_CHARS = set("äöüß")
-SPANISH_CHARS = set("ñ¿¡")
+TURKISH_CHARS = set("\u0131\u015f\u011f\u00fc\u00f6\u00e7\u0130")
+GERMAN_CHARS = set("\u00e4\u00f6\u00fc\u00df")
+SPANISH_CHARS = set("\u00f1\u00bf\u00a1")
 ARABIC_RE = re.compile(r"[\u0600-\u06FF]")
 EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
 
@@ -63,14 +60,12 @@ LANG_WORDS = {
            "recette", "cuisine", "voyage", "mode"},
 }
 
-
 def load_history() -> Set[str]:
     try:
         with open(HISTORY_FILE, "r", encoding="utf-8") as f:
             return set(json.load(f).get("seen", []))
     except Exception:
         return set()
-
 
 def add_to_history(usernames: List[str]) -> None:
     seen = load_history()
@@ -81,7 +76,6 @@ def add_to_history(usernames: List[str]) -> None:
     except Exception:
         pass
 
-
 def country_to_iso(value: str) -> Optional[str]:
     if not value:
         return None
@@ -90,12 +84,10 @@ def country_to_iso(value: str) -> Optional[str]:
         return v.upper()
     return COUNTRY_NAME_TO_ISO.get(v)
 
-
 def lang_for_country(iso: Optional[str]) -> str:
     if not iso:
         return "en"
     return COUNTRY_LANG.get(iso.upper(), "en")
-
 
 def detect_lang_from_text(text: str) -> Optional[str]:
     if not text:
@@ -109,21 +101,13 @@ def detect_lang_from_text(text: str) -> Optional[str]:
     if any(ch in SPANISH_CHARS for ch in text):
         return "es"
     low = text.lower()
-    tokens = set(re.findall(r"[a-zàâäçéèêëîïôöùûüñ]+", low))
+    tokens = set(re.findall(r"[a-z\u00e0\u00e2\u00e4\u00e7\u00e9\u00e8\u00ea\u00eb\u00ee\u00ef\u00f4\u00f6\u00f9\u00fb\u00fc\u00f1]+", low))
     best_lang, best_hits = None, 0
     for lang, words in LANG_WORDS.items():
         hits = len(tokens & words)
         if hits > best_hits:
             best_lang, best_hits = lang, hits
     return best_lang if best_hits >= 1 else None
-
-
-def load_config(path: Optional[str] = None) -> dict:
-    if path is None:
-        path = "config.json" if os.path.exists("config.json") else "config.example.json"
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
 
 def _first(d: dict, keys: List[str], default=None):
     for k in keys:
@@ -141,7 +125,6 @@ def _first(d: dict, keys: List[str], default=None):
         elif k in d and d[k] not in (None, ""):
             return d[k]
     return default
-
 
 def normalize_item(item: dict) -> Optional[dict]:
     username = _first(item, ["handle", "username", "uniqueId", "userName", "authorMeta.name", "author.uniqueId"])
@@ -190,7 +173,6 @@ def normalize_item(item: dict) -> Optional[dict]:
         "profile": profile,
     }
 
-
 def _fetch_dataset(dataset_id: str, token: str, limit: int) -> List[dict]:
     ds_url = f"{APIFY_BASE}/datasets/{dataset_id}/items"
     resp = requests.get(ds_url, params={"token": token, "limit": limit}, timeout=60)
@@ -198,7 +180,6 @@ def _fetch_dataset(dataset_id: str, token: str, limit: int) -> List[dict]:
         return []
     data = resp.json()
     return data if isinstance(data, list) else []
-
 
 def _start_run(actor: str, tokens: List[str], actor_input: dict, memory: int):
     """Token listesini sirayla dener; biri kabul edince (run, token) doner.
@@ -223,7 +204,6 @@ def _start_run(actor: str, tokens: List[str], actor_input: dict, memory: int):
                 break
     raise RuntimeError(f"Tum Apify token'lari basarisiz. Son hata -> {last_err}")
 
-
 def find_creators(cfg: dict) -> List[dict]:
     # Coklu token: apify_tokens listesi ya da tek apify_token
     tokens = cfg.get("apify_tokens") or ([cfg.get("apify_token")] if cfg.get("apify_token") else [])
@@ -244,9 +224,10 @@ def find_creators(cfg: dict) -> List[dict]:
     skip_seen = bool(cfg.get("skip_seen", True))
     apify_memory = int(cfg.get("apify_memory", 16384))
 
-    # AYNI KISILERI GETIRME: cagiran (worker) bilinen kullanicilari verir,
-    # bunlar toplama sirasinda atlanir -> her tur genuinely YENI kisiler.
-    exclude = {str(u).lower() for u in cfg.get("exclude_usernames", []) if u}
+    # ONEMLI (tekrar bug fix): CRM'de zaten olan kisiler/emailler ARAMA SIRASINDA
+    # atlanir; boylece her tur havuzda daha derine iner ve GERCEKTEN yeni kisi getirir.
+    exclude_users = {str(u).lower() for u in (cfg.get("exclude_usernames") or set())}
+    exclude_emails = {str(e).strip().lower() for e in (cfg.get("exclude_emails") or set()) if e}
 
     wanted = set()
     for c in cfg.get("countries", []) or []:
@@ -257,8 +238,9 @@ def find_creators(cfg: dict) -> List[dict]:
 
     history = load_history() if skip_seen else set()
 
-    # Genis tara ki bilinenleri eledikten sonra yeni kisiler yuzeye ciksin.
-    max_results = max(int(target * 8), target + 200)
+    # Daha genis havuz: bilinenleri elediktan sonra target kadar YENI kalabilsin diye
+    # eskisinden (x6) daha derin cekiyoruz.
+    max_results = max(int(target * 12) + len(exclude_users), target + 400)
     actor_input = cfg.get("apify_input") or {
         "hashtags": hashtags,
         "min_followers": min_f,
@@ -301,10 +283,13 @@ def find_creators(cfg: dict) -> List[dict]:
             if not rec or rec["username"] in matched:
                 continue
             uname = rec["username"].lower()
-            if uname in exclude:          # zaten bilinen kisi -> atla (AYNI KISI GELMEZ)
-                continue
+            if uname in exclude_users:
+                continue  # CRM'de zaten var -> atla (tekrar getirme)
             if skip_seen and uname in history:
                 continue
+            em = (rec.get("email") or "").strip().lower()
+            if em and em in exclude_emails:
+                continue  # bu email'e zaten ulasilmis -> atla
             f = rec["followers"]
             if f and (f < min_f or f > max_f):
                 continue
@@ -344,7 +329,6 @@ def find_creators(cfg: dict) -> List[dict]:
     if skip_seen and rows:
         add_to_history([r["username"] for r in rows])
     return rows
-
 
 def save_csv(rows: List[dict], out_csv: str) -> None:
     import csv
