@@ -62,43 +62,45 @@
 <body>
 <div class="wrap">
   <header>
-    <div class="logo"><span class="dot">🧠</span> CaptionAI Finder</div>
+    <div class="logo"><span class="dot">\ud83e\udde0</span> CaptionAI Finder</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <span class="keydot" id="kd-apify">Apify: 0</span>
       <span class="keydot" id="kd-ai">AI: yok</span>
-      <span class="keydot" id="kd-send">Gönderim: gmail</span>
+      <span class="keydot" id="kd-send">G\u00f6nderim: gmail</span>
     </div>
   </header>
 
   <div class="tabs">
-    <div class="tab active" data-t="setup" onclick="tab('setup')">⚙️ Kurulum & Başlat</div>
-    <div class="tab" data-t="db" onclick="tab('db')">🗄️ Database</div>
-    <div class="tab" data-t="email" onclick="tab('email')">✉️ Gönderilenler</div>
-    <div class="tab" data-t="stats" onclick="tab('stats')">📊 Analiz</div>
+    <div class="tab active" data-t="setup" onclick="tab('setup')">\u2699\ufe0f Kurulum &amp; Ba\u015flat</div>
+    <div class="tab" data-t="db" onclick="tab('db')">\ud83d\uddc4\ufe0f Database</div>
+    <div class="tab" data-t="email" onclick="tab('email')">\u2709\ufe0f G\u00f6nderilenler</div>
+    <div class="tab" data-t="stats" onclick="tab('stats')">\ud83d\udcca Analiz</div>
   </div>
 
   <div id="pane-setup">
     <div class="card">
-      <h2>1 · Anahtarlar</h2>
-      <label>Apify token(ları) <span id="apifyHave" style="color:var(--green)"></span></label>
-      <textarea id="apify" placeholder="apify_api_xxx (her satıra bir tane)"></textarea>
-      <label>Groq key(lerı) <span id="groqHave" style="color:var(--green)"></span></label>
+      <h2>1 \u00b7 Anahtarlar</h2>
+      <label>Apify token(lar\u0131) <span id="apifyHave" style="color:var(--green)"></span></label>
+      <textarea id="apify" placeholder="apify_api_xxx (her sat\u0131ra bir tane)"></textarea>
+      <label>Groq key(leri) <span id="groqHave" style="color:var(--green)"></span></label>
       <textarea id="groq" placeholder="gsk_xxx"></textarea>
+      <label>ScrapeCreators key(leri) <span class="pill">opsiyonel</span> <span id="scHave" style="color:var(--green)"></span></label>
+      <textarea id="sc" placeholder="scrapecreators key (Scraper=ScrapeCreators se\u00e7ersen gerekli)"></textarea>
     </div>
 
     <div class="card">
-      <h2>2 · Gönderim yöntemi</h2>
+      <h2>2 \u00b7 G\u00f6nderim y\u00f6ntemi</h2>
       <div class="seg">
-        <button id="seg-gmail" class="on" onclick="setSender('gmail')">Gmail (düşük hacim)</button>
-        <button id="seg-ses" onclick="setSender('ses')">Amazon SES (yüksek hacim)</button>
+        <button id="seg-gmail" class="on" onclick="setSender('gmail')">Gmail (d\u00fc\u015f\u00fck hacim)</button>
+        <button id="seg-ses" onclick="setSender('ses')">Amazon SES (y\u00fcksek hacim)</button>
       </div>
       <div id="box-gmail" style="margin-top:12px">
-        <p class="hint">Gmail + <b>uygulama şifresi</b>. Hesap başı günlük ~30, dolunca sıradakine geçer. <a class="link" href="https://myaccount.google.com/apppasswords" target="_blank">apppasswords</a></p>
+        <p class="hint">Gmail + <b>uygulama \u015fifresi</b>. Hesap ba\u015f\u0131 g\u00fcnl\u00fck ~30, dolunca s\u0131radakine ge\u00e7er. <a class="link" href="https://myaccount.google.com/apppasswords" target="_blank">apppasswords</a></p>
         <div id="accts"></div>
         <div class="row" style="margin-top:10px"><button class="btn secondary" onclick="addAcct()">+ Hesap ekle</button></div>
       </div>
       <div id="box-ses" class="hidden" style="margin-top:12px">
-        <p class="hint">Domainini SES'te dogrula (SPF+DKIM) + production access al. SES > SMTP settings'ten <b>SMTP credentials</b> olustur (IAM key degil).</p>
+        <p class="hint">Domainini SES'te dogrula (SPF+DKIM) + production access al. SES &gt; SMTP settings'ten <b>SMTP credentials</b> olustur (IAM key degil).</p>
         <div class="row">
           <div><label>SMTP host</label><input id="ses_host" placeholder="email-smtp.eu-central-1.amazonaws.com"></div>
           <div style="max-width:110px"><label>Port</label><input id="ses_port" value="587"></div>
@@ -108,40 +110,55 @@
           <div><label>SMTP pass <span id="sesPassHave" style="color:var(--green)"></span></label><input id="ses_pass" type="password" placeholder="(degistirmeyeceksen bos birak)"></div>
         </div>
         <div class="row">
-          <div><label>Gönderen email (dogrulanmis)</label><input id="ses_from" placeholder="merhaba@thecaptionai.com"></div>
-          <div><label>Gönderen adi</label><input id="ses_fromname" placeholder="CaptionAI"></div>
+          <div><label>G\u00f6nderen email (dogrulanmis)</label><input id="ses_from" placeholder="merhaba@thecaptionai.com"></div>
+          <div><label>G\u00f6nderen adi</label><input id="ses_fromname" placeholder="CaptionAI"></div>
         </div>
-        <p class="hint">Günlük limit SES kotana bağlı (production'da binlerce). Sandbox'ta sadece dogrulanmis adreslere gider.</p>
+        <p class="hint">G\u00fcnl\u00fck limit SES kotana ba\u011fl\u0131 (production'da binlerce). Sandbox'ta sadece dogrulanmis adreslere gider.</p>
       </div>
     </div>
 
     <div class="card">
-      <h2>3 · Hedefleme</h2>
+      <h2>3 \u00b7 Hedefleme</h2>
       <div class="row">
-        <div><label>Ülke/dil</label><input id="t_countries" placeholder="Turkiye"></div>
+        <div><label>Scraper</label>
+          <select id="t_scraper">
+            <option value="apify">Apify (varsay\u0131lan)</option>
+            <option value="scrapecreators">ScrapeCreators (limitsiz/y\u00fcksek)</option>
+          </select>
+        </div>
+        <div><label>Platform</label>
+          <select id="t_platform">
+            <option value="tiktok">TikTok</option>
+            <option value="instagram">Instagram</option>
+            <option value="both">\u0130kisi (TikTok + Instagram)</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div><label>\u00dclke/dil</label><input id="t_countries" placeholder="Turkiye"></div>
         <div><label>Dil (AI hashtag)</label><input id="t_lang" value="tr"></div>
       </div>
       <label>Hashtag'ler</label>
       <textarea id="t_hashtags" placeholder="yemektarifi, gunlukvlog, kombin"></textarea>
       <div class="row" style="margin-top:8px">
         <input id="t_niche" placeholder="ipucu (ops.): kucuk isletme, yemek..." style="flex:1">
-        <button class="btn secondary small" id="htBtn" onclick="genHashtags()">🧠 AI ile üret</button>
+        <button class="btn secondary small" id="htBtn" onclick="genHashtags()">\ud83e\udde0 AI ile \u00fcret</button>
       </div>
       <div id="htStatus" class="status"></div>
       <div class="row">
-        <div><label>Min takipçi</label><input id="t_min" placeholder="3000"></div>
-        <div><label>Max takipçi</label><input id="t_max" placeholder="80000"></div>
-        <div><label>Kombo başı</label><input id="t_target" value="60"></div>
+        <div><label>Min takip\u00e7i</label><input id="t_min" placeholder="3000"></div>
+        <div><label>Max takip\u00e7i</label><input id="t_max" placeholder="80000"></div>
+        <div><label>Kombo ba\u015f\u0131</label><input id="t_target" value="60"></div>
       </div>
     </div>
 
     <div class="card">
-      <h2>4 · Kaydet & Başlat</h2>
+      <h2>4 \u00b7 Kaydet &amp; Ba\u015flat</h2>
       <div class="row">
-        <button class="btn" onclick="save()">💾 Kaydet</button>
-        <button class="btn secondary" onclick="check()">🔍 Anahtarları test et</button>
-        <button class="btn big green" id="startBtn" onclick="startAuto()" style="flex:1">▶️ Başlat</button>
-        <button class="btn red small" onclick="stopAuto()">⏹ Durdur</button>
+        <button class="btn" onclick="save()">\ud83d\udcbe Kaydet</button>
+        <button class="btn secondary" onclick="check()">\ud83d\udd0d Anahtarlar\u0131 test et</button>
+        <button class="btn big green" id="startBtn" onclick="startAuto()" style="flex:1">\u25b6\ufe0f Ba\u015flat</button>
+        <button class="btn red small" onclick="stopAuto()">\u23f9 Durdur</button>
       </div>
       <div id="saveStatus" class="status"></div>
       <div id="checkOut"></div>
@@ -155,26 +172,26 @@
       <div class="row">
         <input id="db_q" placeholder="ara (kullanici, isim, email)" style="flex:2" oninput="loadDb()">
         <select id="db_status" onchange="loadDb()" style="flex:1">
-          <option value="">Aktif (gönderilmemiş)</option>
+          <option value="">Aktif (g\u00f6nderilmemi\u015f)</option>
           <option value="queued">Kuyrukta</option>
-          <option value="sent">Gönderildi</option>
-          <option value="replied">Yanıtladı</option>
-          <option value="skipped">Atlandı</option>
+          <option value="sent">G\u00f6nderildi</option>
+          <option value="replied">Yan\u0131tlad\u0131</option>
+          <option value="skipped">Atland\u0131</option>
         </select>
-        <button class="btn secondary small" onclick="loadDb()">↻ Yenile</button>
+        <button class="btn secondary small" onclick="loadDb()">\u21bb Yenile</button>
       </div>
       <div class="row" style="margin-top:10px">
-        <button class="btn small secondary" onclick="toggleAll(true)">Tümünü seç</button>
-        <button class="btn small secondary" onclick="toggleAll(false)">Seçimi kaldır</button>
-        <button class="btn small green" onclick="sendSelected()">✉️ Seçilenlere Gönder</button>
-        <button class="btn small red" onclick="deleteSelected()">🗑️ Seçilenleri Sil</button>
+        <button class="btn small secondary" onclick="toggleAll(true)">T\u00fcm\u00fcn\u00fc se\u00e7</button>
+        <button class="btn small secondary" onclick="toggleAll(false)">Se\u00e7imi kald\u0131r</button>
+        <button class="btn small green" onclick="sendSelected()">\u2709\ufe0f Se\u00e7ilenlere G\u00f6nder</button>
+        <button class="btn small red" onclick="deleteSelected()">\ud83d\uddd1\ufe0f Se\u00e7ilenleri Sil</button>
       </div>
-      <p class="hint">Gönderilen kişiler varsayılan gizli (bir daha ASLA mail atilmaz). Görmek istersen durumdan "Gönderildi" seç.</p>
+      <p class="hint">G\u00f6nderilen ki\u015filer varsay\u0131lan gizli (bir daha ASLA mail atilmaz). G\u00f6rmek istersen durumdan "G\u00f6nderildi" se\u00e7.</p>
       <div id="dbStatus" class="status"></div>
       <div class="tbl-wrap">
         <table id="dbTbl">
           <thead><tr><th><input type="checkbox" id="chkAll" onclick="toggleAll(this.checked)"></th>
-            <th>Kişi</th><th>Takipçi</th><th>Dil</th><th>Email</th><th>Durum</th><th>Aksiyon</th></tr></thead>
+            <th>Ki\u015fi</th><th>Takip\u00e7i</th><th>Dil</th><th>Email</th><th>Durum</th><th>Aksiyon</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -183,36 +200,36 @@
 
   <div id="pane-email" class="hidden">
     <div class="card">
-      <h2>Gönderilen Email'ler <button class="btn secondary small" style="float:right" onclick="loadSent()">↻</button></h2>
+      <h2>G\u00f6nderilen Email'ler <button class="btn secondary small" style="float:right" onclick="loadSent()">\u21bb</button></h2>
       <div class="tbl-wrap">
-        <table id="sentTbl"><thead><tr><th>Kişi</th><th>Email</th><th>Hesap</th><th>Tarih</th></tr></thead><tbody></tbody></table>
+        <table id="sentTbl"><thead><tr><th>Ki\u015fi</th><th>Email</th><th>Hesap</th><th>Tarih</th></tr></thead><tbody></tbody></table>
       </div>
     </div>
   </div>
 
   <div id="pane-stats" class="hidden">
     <div class="card">
-      <h2>Genel <button class="btn secondary small" style="float:right" onclick="loadStats()">↻</button></h2>
+      <h2>Genel <button class="btn secondary small" style="float:right" onclick="loadStats()">\u21bb</button></h2>
       <div class="kpis" id="kpis"></div>
     </div>
   </div>
 </div>
 
 <script>
-  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];}); }
   function fmt(n){ n=+n||0; return n>=1000?(n/1000).toFixed(1).replace('.0','')+'K':''+n; }
-  function setS(id,msg,cls){ const el=document.getElementById(id); if(el){ el.textContent=msg; el.className='status'+(cls?' '+cls:''); } }
-  let PW = sessionStorage.getItem('setup_pw') || '';
-  let SENDER = 'gmail';
+  function setS(id,msg,cls){ var el=document.getElementById(id); if(el){ el.textContent=msg; el.className='status'+(cls?' '+cls:''); } }
+  var PW = sessionStorage.getItem('setup_pw') || '';
+  var SENDER = 'gmail';
   function wpw(u){ return PW ? (u+(u.includes('?')?'&':'?')+'pw='+encodeURIComponent(PW)) : u; }
   async function api(url, opts){
-    let r = await fetch(wpw(url), opts);
-    if(r.status===403){ const p=prompt('Panel sifresi (kurulum sonunda yazan):'); if(p!==null){ PW=p; sessionStorage.setItem('setup_pw',PW); r=await fetch(wpw(url),opts);} }
+    var r = await fetch(wpw(url), opts);
+    if(r.status===403){ var p=prompt('Panel sifresi (kurulum sonunda yazan):'); if(p!==null){ PW=p; sessionStorage.setItem('setup_pw',PW); r=await fetch(wpw(url),opts);} }
     return r;
   }
 
   function tab(t){
-    ['setup','db','email','stats'].forEach(x=>{
+    ['setup','db','email','stats'].forEach(function(x){
       document.getElementById('pane-'+x).classList.toggle('hidden', x!==t);
       document.querySelector('.tab[data-t="'+x+'"]').classList.toggle('active', x===t);
     });
@@ -225,170 +242,179 @@
     document.getElementById('seg-ses').classList.toggle('on', s==='ses');
     document.getElementById('box-gmail').classList.toggle('hidden', s!=='gmail');
     document.getElementById('box-ses').classList.toggle('hidden', s!=='ses');
-    document.getElementById('kd-send').textContent='Gönderim: '+s;
+    document.getElementById('kd-send').textContent='G\u00f6nderim: '+s;
   }
 
-  const accts=[];
+  var accts=[];
   function renderAccts(){
-    document.getElementById('accts').innerHTML = accts.map((a,i)=>
-      '<div class="acct"><input placeholder="email@gmail.com" value="'+esc(a.email)+'" oninput="accts['+i+'].email=this.value">'+
-      '<input placeholder="uygulama sifresi" value="'+esc(a.password||'')+'" oninput="accts['+i+'].password=this.value">'+
-      '<input placeholder="gonderen adi" value="'+esc(a.from_name||'')+'" oninput="accts['+i+'].from_name=this.value">'+
-      '<span class="x" onclick="delAcct('+i+')">sil</span></div>').join('') || '<p class="hint">Henüz hesap yok.</p>';
+    document.getElementById('accts').innerHTML = accts.map(function(a,i){
+      return '<div class="acct">'+
+        '<input placeholder="email@gmail.com" value="'+esc(a.email)+'" oninput="accts['+i+'].email=this.value">'+
+        '<input placeholder="uygulama sifresi" value="'+esc(a.password||'')+'" oninput="accts['+i+'].password=this.value">'+
+        '<input placeholder="gonderen adi" value="'+esc(a.from_name||'')+'" oninput="accts['+i+'].from_name=this.value">'+
+        '<span class="x" onclick="delAcct('+i+')">sil</span></div>';
+    }).join('') || '<p class="hint">Hen\u00fcz hesap yok.</p>';
   }
   function addAcct(){ accts.push({email:'',password:'',from_name:''}); renderAccts(); }
   function delAcct(i){ accts.splice(i,1); renderAccts(); }
 
   async function load(){
-    const r=await api('/api/setup/load'); if(!r.ok) return; const d=await r.json();
-    if(d.apify_masked&&d.apify_masked.length) document.getElementById('apifyHave').textContent='(kayıtlı: '+d.apify_masked.join(', ')+')';
-    if(d.groq_masked&&d.groq_masked.length) document.getElementById('groqHave').textContent='(kayıtlı: '+d.groq_masked.join(', ')+')';
-    (d.accounts||[]).forEach(a=>accts.push({email:a.email||'',password:'',from_name:a.from_name||''}));
+    var r=await api('/api/setup/load'); if(!r.ok) return; var d=await r.json();
+    if(d.apify_masked&&d.apify_masked.length) document.getElementById('apifyHave').textContent='(kay\u0131tl\u0131: '+d.apify_masked.join(', ')+')';
+    if(d.groq_masked&&d.groq_masked.length) document.getElementById('groqHave').textContent='(kay\u0131tl\u0131: '+d.groq_masked.join(', ')+')';
+    if(d.scrapecreators_masked&&d.scrapecreators_masked.length) document.getElementById('scHave').textContent='(kay\u0131tl\u0131: '+d.scrapecreators_masked.join(', ')+')';
+    (d.accounts||[]).forEach(function(a){ accts.push({email:a.email||'',password:'',from_name:a.from_name||''}); });
     renderAccts();
-    const s=d.ses||{};
+    var s=d.ses||{};
     if(s.smtp_host) document.getElementById('ses_host').value=s.smtp_host;
     if(s.smtp_port) document.getElementById('ses_port').value=s.smtp_port;
     if(s.smtp_user) document.getElementById('ses_user').value=s.smtp_user;
     if(s.from_email) document.getElementById('ses_from').value=s.from_email;
     if(s.from_name) document.getElementById('ses_fromname').value=s.from_name;
-    if(s.smtp_pass_set) document.getElementById('sesPassHave').textContent='(kayıtlı)';
+    if(s.smtp_pass_set) document.getElementById('sesPassHave').textContent='(kay\u0131tl\u0131)';
     setSender(d.sender||'gmail');
-    const t=d.targeting||{};
+    var t=d.targeting||{};
     if(t.countries) document.getElementById('t_countries').value=Array.isArray(t.countries)?t.countries.join(', '):t.countries;
     if(t.hashtags) document.getElementById('t_hashtags').value=Array.isArray(t.hashtags)?t.hashtags.join(', '):t.hashtags;
     if(t.min_followers) document.getElementById('t_min').value=t.min_followers;
     if(t.max_followers) document.getElementById('t_max').value=t.max_followers;
     if(t.target_count) document.getElementById('t_target').value=t.target_count;
+    if(t.scraper) document.getElementById('t_scraper').value=t.scraper;
+    var pf=t.platforms||t.platform;
+    if(pf){ if(Array.isArray(pf)) pf=(pf.length>1?'both':(pf[0]||'tiktok')); document.getElementById('t_platform').value=pf; }
   }
 
   function targeting(){
-    const g=id=>document.getElementById(id).value.trim(); const t={};
+    var g=function(id){return document.getElementById(id).value.trim();}; var t={};
     if(g('t_countries')) t.countries=g('t_countries');
     if(g('t_hashtags')) t.hashtags=g('t_hashtags');
     if(g('t_min')) t.min_followers=+g('t_min');
     if(g('t_max')) t.max_followers=+g('t_max');
     if(g('t_target')) t.target_count=+g('t_target');
+    t.scraper=document.getElementById('t_scraper').value;
+    t.platforms=document.getElementById('t_platform').value;
     return t;
   }
   function sesData(){
-    const g=id=>document.getElementById(id).value.trim();
+    var g=function(id){return document.getElementById(id).value.trim();};
     return { smtp_host:g('ses_host'), smtp_port:+g('ses_port')||587, smtp_user:g('ses_user'),
-             smtp_pass:g('ses_pass'), from_email:g('ses_from'), from_name:g('ses_fromname') };
+      smtp_pass:g('ses_pass'), from_email:g('ses_from'), from_name:g('ses_fromname') };
   }
 
   async function save(){
     setS('saveStatus','Kaydediliyor...');
-    const body={ apify_tokens:document.getElementById('apify').value, groq_keys:document.getElementById('groq').value,
-      email_accounts:accts.filter(a=>a.email&&a.password), ses:sesData(), sender:SENDER, targeting:targeting() };
-    const r=await api('/api/setup/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    const d=await r.json();
-    if(d.ok){ setS('saveStatus','Kaydedildi ✅ Apify:'+d.apify+' · Groq:'+d.groq+' · Gönderim:'+d.sender,'ok');
-      document.getElementById('apify').value=''; document.getElementById('groq').value=''; document.getElementById('ses_pass').value=''; load(); return true; }
+    var body={ apify_tokens:document.getElementById('apify').value, groq_keys:document.getElementById('groq').value,
+      scrapecreators_keys:document.getElementById('sc').value,
+      email_accounts:accts.filter(function(a){return a.email&&a.password;}), ses:sesData(), sender:SENDER, targeting:targeting() };
+    var r=await api('/api/setup/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    var d=await r.json();
+    if(d.ok){ setS('saveStatus','Kaydedildi \u2705 Apify:'+d.apify+' \u00b7 Groq:'+d.groq+' \u00b7 G\u00f6nderim:'+d.sender,'ok');
+      document.getElementById('apify').value=''; document.getElementById('groq').value=''; document.getElementById('sc').value=''; document.getElementById('ses_pass').value=''; load(); return true; }
     setS('saveStatus','Hata: '+(d.error||'?'),'err'); return false;
   }
 
   async function genHashtags(){
-    const btn=document.getElementById('htBtn'); btn.disabled=true;
-    setS('htStatus','Kaydediliyor...'); await save(); setS('htStatus','AI hashtag üretiyor...');
-    const body={ lang:(document.getElementById('t_lang').value.trim()||'tr'),
-      countries:document.getElementById('t_countries').value.split(',').map(s=>s.trim()).filter(Boolean),
+    var btn=document.getElementById('htBtn'); btn.disabled=true;
+    setS('htStatus','Kaydediliyor...'); await save(); setS('htStatus','AI hashtag \u00fcretiyor...');
+    var body={ lang:(document.getElementById('t_lang').value.trim()||'tr'),
+      countries:document.getElementById('t_countries').value.split(',').map(function(s){return s.trim();}).filter(Boolean),
       niche:document.getElementById('t_niche').value.trim(), count:14 };
-    try{ const r=await api('/api/setup/hashtags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); const d=await r.json();
+    try{ var r=await api('/api/setup/hashtags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); var d=await r.json();
       if(!d.ok){ setS('htStatus','Hata: '+(d.error||'?'),'err'); btn.disabled=false; return; }
       document.getElementById('t_hashtags').value=(d.hashtags||[]).join(', ');
-      setS('htStatus',(d.hashtags||[]).length+' hashtag üretildi ✅ (Kaydet\'e bas)','ok');
+      setS('htStatus',(d.hashtags||[]).length+' hashtag \u00fcretildi \u2705 (Kaydet\'e bas)','ok');
     }catch(e){ setS('htStatus','Hata: '+e.message,'err'); }
     btn.disabled=false;
   }
 
   async function check(){
     setS('saveStatus','Test ediliyor...');
-    const r=await api('/api/setup/check'); const d=await r.json();
+    var r=await api('/api/setup/check'); var d=await r.json();
     if(!d.ok){ setS('saveStatus','Hata: '+(d.error||'?'),'err'); return; }
     setS('saveStatus','Test tamam.','ok');
-    let h='<table><tr><th>Apify</th><th>Plan</th><th>Kullanıldı</th><th>Kalan</th></tr>';
-    (d.apify||[]).forEach(x=>{ h += x.ok? '<tr><td>'+esc(x.token)+'</td><td>'+esc(x.plan)+'</td><td>$'+esc(x.used_usd)+'</td><td>'+(x.credit_left_usd==null?'-':'$'+esc(x.credit_left_usd))+'</td></tr>' : '<tr><td>'+esc(x.token)+'</td><td colspan=3><span class="pill">'+esc(x.error||'hata')+'</span></td></tr>'; });
-    h+='</table><table><tr><th>Groq</th><th>Istek/gün</th><th>Token/dk</th></tr>';
-    (d.groq||[]).forEach(x=>{ h += '<tr><td>'+esc(x.key)+'</td><td>'+esc(x.req_remaining_day||'?')+'/'+esc(x.req_limit_day||'?')+'</td><td>'+esc(x.tok_remaining_min||'?')+'/'+esc(x.tok_limit_min||'?')+'</td></tr>'; });
-    h+='</table>'; document.getElementById('checkOut').innerHTML=h;
+    var h='<div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Apify</th><th>Plan</th><th>Kullan\u0131ld\u0131</th><th>Kalan</th></tr></thead><tbody>';
+    (d.apify||[]).forEach(function(x){ h += x.ok? '<tr><td>'+esc(x.token)+'</td><td>'+esc(x.plan)+'</td><td>$'+esc(x.used_usd)+'</td><td>'+(x.credit_left_usd==null?'-':'$'+esc(x.credit_left_usd))+'</td></tr>' : '<tr><td>'+esc(x.token)+'</td><td colspan="3">'+esc(x.error||'hata')+'</td></tr>'; });
+    h+='</tbody></table></div><div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Groq</th><th>Istek/g\u00fcn</th><th>Token/dk</th></tr></thead><tbody>';
+    (d.groq||[]).forEach(function(x){ h += '<tr><td>'+esc(x.key)+'</td><td>'+esc(x.req_remaining_day||'?')+'/'+esc(x.req_limit_day||'?')+'</td><td>'+esc(x.tok_remaining_min||'?')+'/'+esc(x.tok_limit_min||'?')+'</td></tr>'; });
+    h+='</tbody></table></div>'; document.getElementById('checkOut').innerHTML=h;
   }
 
   async function startAuto(){
-    const btn=document.getElementById('startBtn'); btn.disabled=true;
-    setS('saveStatus','Kaydedip başlatılıyor...'); await save();
-    const r=await api('/api/control/start',{method:'POST'}); const d=await r.json();
+    var btn=document.getElementById('startBtn'); btn.disabled=true;
+    setS('saveStatus','Kaydedip ba\u015flat\u0131l\u0131yor...'); await save();
+    var r=await api('/api/control/start',{method:'POST'}); var d=await r.json();
     if(!d.ok){ setS('saveStatus','Hata: '+(d.error||'?'),'err'); btn.disabled=false; return; }
-    setS('saveStatus','Başladı 🚀','ok'); btn.disabled=false;
+    setS('saveStatus','Ba\u015flad\u0131 \ud83d\ude80','ok'); btn.disabled=false;
   }
-  async function stopAuto(){ const r=await api('/api/control/stop',{method:'POST'}); await r.json(); setS('saveStatus','Durduruldu.'); }
+  async function stopAuto(){ var r=await api('/api/control/stop',{method:'POST'}); await r.json(); setS('saveStatus','Durduruldu.'); }
 
   async function pollStatus(){
     try{
-      const r=await api('/api/control/status'); if(r.status===403) return; const d=await r.json(); if(!d.ok) return;
-      const a=d.auto||{}, e=d.email||{}, k=d.keys||{};
+      var r=await api('/api/control/status'); if(r.status===403) return; var d=await r.json(); if(!d.ok) return;
+      var a=d.auto||{}, e=d.email||{}, k=d.keys||{};
       document.getElementById('kd-apify').textContent='Apify: '+(k.apify||0); document.getElementById('kd-apify').classList.toggle('on',(k.apify||0)>0);
-      document.getElementById('kd-ai').textContent='AI: '+((k.groq||0)>0?'✓':'yok'); document.getElementById('kd-ai').classList.toggle('on',(k.groq||0)>0);
-      if(k.sender) document.getElementById('kd-send').textContent='Gönderim: '+k.sender;
-      let h='<span class="dotlive '+(a.running?'on':'off')+'"></span><b>'+(a.running?'Çalışıyor':'Durdu')+'</b>  ';
-      h+='<span class="kpi2">Tur: <b>'+(a.rounds||0)+'</b></span><span class="kpi2">Bulunan: <b>'+(a.found||0)+'</b></span>';
+      document.getElementById('kd-ai').textContent='AI: '+((k.groq||0)>0?'\u2713':'yok'); document.getElementById('kd-ai').classList.toggle('on',(k.groq||0)>0);
+      if(k.sender) document.getElementById('kd-send').textContent='G\u00f6nderim: '+k.sender;
+      var h='<span class="dotlive '+(a.running?'on':'off')+'"></span>'+(a.running?'\u00c7al\u0131\u015f\u0131yor':'Durdu');
+      h+=' <span class="kpi2">Tur: <b>'+(a.rounds||0)+'</b></span><span class="kpi2">Bulunan: <b>'+(a.found||0)+'</b></span>';
       if(a.combo) h+='<span class="kpi2">Hashtag: <b>'+esc(a.combo)+'</b></span>';
       if(e&&e.running) h+='<span class="kpi2">Email: <b>'+(e.sent||0)+'/'+(e.total||0)+'</b>'+(e.provider?' ('+esc(e.provider)+')':'')+'</span>';
-      if(a.last) h+='<br><span style="color:var(--muted)">'+esc(a.last)+'</span>';
+      if(a.last) h+='<div style="margin-top:6px">'+esc(a.last)+'</div>';
       document.getElementById('live').innerHTML=h;
     }catch(e){}
   }
 
-  let DB=[];
+  var DB=[];
   async function loadDb(){
-    const q=document.getElementById('db_q').value.trim(); const st=document.getElementById('db_status').value;
-    const extra = st ? '' : '&hide_sent=1';
-    const r=await fetch('/api/db?q='+encodeURIComponent(q)+'&status='+encodeURIComponent(st)+extra); const d=await r.json();
+    var q=document.getElementById('db_q').value.trim(); var st=document.getElementById('db_status').value;
+    var extra = st ? '' : '&hide_sent=1';
+    var r=await fetch('/api/db?q='+encodeURIComponent(q)+'&status='+encodeURIComponent(st)+extra); var d=await r.json();
     DB=d.rows||[];
-    document.querySelector('#dbTbl tbody').innerHTML = DB.length? DB.map((x)=>{
-      const prof = x.profile || ('https://www.tiktok.com/@'+encodeURIComponent(x.username));
+    document.querySelector('#dbTbl tbody').innerHTML = DB.length? DB.map(function(x){
+      var prof = x.profile || ('https://www.tiktok.com/@'+encodeURIComponent(x.username));
       return '<tr>'+
         '<td><input type="checkbox" class="chk" data-u="'+esc(x.username)+'"></td>'+
-        '<td><a class="link" href="'+esc(prof)+'" target="_blank" rel="noopener">'+esc(x.nickname||x.username)+'</a><br><span style="color:var(--muted);font-size:11px">@'+esc(x.username)+'</span></td>'+
+        '<td><a class="link" href="'+esc(prof)+'" target="_blank">'+esc(x.nickname||x.username)+'</a><br><span class="hint">@'+esc(x.username)+'</span></td>'+
         '<td>'+fmt(x.followers)+'</td><td>'+esc(x.lang||'')+'</td><td>'+esc(x.email||'-')+'</td>'+
         '<td><span class="pill">'+esc(x.status||'')+'</span></td>'+
         '<td>'+
-          (x.email? '<button class="btn small green" onclick="sendOne(\''+esc(x.username)+'\',this)">✉️ Gönder</button> ' : '')+
-          '<button class="btn small secondary" onclick="requeue(\''+esc(x.username)+'\')">↺ Kuyruğa</button> '+
+          (x.email? '<button class="btn small green" onclick="sendOne(\''+esc(x.username)+'\',this)">\u2709\ufe0f G\u00f6nder</button> ' : '')+
+          '<button class="btn small secondary" onclick="requeue(\''+esc(x.username)+'\')">\u21ba Kuyru\u011fa</button> '+
           '<button class="btn small red" onclick="delRow(\''+esc(x.username)+'\')">Sil</button>'+
         '</td></tr>';
-    }).join('') : '<tr><td colspan=7 style="color:var(--muted)">Kayıt yok</td></tr>';
-    setS('dbStatus', DB.length+' kayıt');
-    const a=document.getElementById('chkAll'); if(a) a.checked=false;
+    }).join('') : '<tr><td colspan="7" class="hint">Kay\u0131t yok</td></tr>';
+    setS('dbStatus', DB.length+' kay\u0131t');
+    var a=document.getElementById('chkAll'); if(a) a.checked=false;
   }
-  function selected(){ return Array.from(document.querySelectorAll('.chk:checked')).map(c=>c.dataset.u); }
-  function toggleAll(v){ document.querySelectorAll('.chk').forEach(c=>c.checked=v); const a=document.getElementById('chkAll'); if(a) a.checked=v; }
+  function selected(){ return Array.prototype.slice.call(document.querySelectorAll('.chk:checked')).map(function(c){return c.dataset.u;}); }
+  function toggleAll(v){ document.querySelectorAll('.chk').forEach(function(c){c.checked=v;}); var a=document.getElementById('chkAll'); if(a) a.checked=v; }
 
   async function sendOne(u, btn){
     if(btn){ btn.disabled=true; btn.textContent='...'; }
-    const r=await fetch('/api/email/send-one',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u})});
-    const d=await r.json();
-    setS('dbStatus', d.ok? ('Gönderildi ✅ ('+(d.account||'')+')') : ('Hata: '+(d.error||'?')), d.ok?'ok':'err');
+    var r=await fetch('/api/email/send-one',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u})});
+    var d=await r.json();
+    setS('dbStatus', d.ok? ('G\u00f6nderildi \u2705 ('+(d.account||'')+')') : ('Hata: '+(d.error||'?')), d.ok?'ok':'err');
     loadDb();
   }
   async function sendSelected(){
-    const us=selected(); if(!us.length){ setS('dbStatus','Kimse seçilmedi.','err'); return; }
-    let ok=0, fail=0;
-    for(const u of us){ const r=await fetch('/api/email/send-one',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u})}); const d=await r.json(); d.ok?ok++:fail++; setS('dbStatus','Gönderiliyor... '+ok+' ok, '+fail+' hata'); }
-    setS('dbStatus','Bitti: '+ok+' gönderildi, '+fail+' hata','ok'); loadDb();
+    var us=selected(); if(!us.length){ setS('dbStatus','Kimse se\u00e7ilmedi.','err'); return; }
+    var ok=0, fail=0;
+    for(var i=0;i<us.length;i++){ var r=await fetch('/api/email/send-one',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:us[i]})}); var d=await r.json(); d.ok?ok++:fail++; setS('dbStatus','G\u00f6nderiliyor... '+ok+' ok, '+fail+' hata'); }
+    setS('dbStatus','Bitti: '+ok+' g\u00f6nderildi, '+fail+' hata','ok'); loadDb();
   }
   async function deleteSelected(){
-    const us=selected(); if(!us.length){ setS('dbStatus','Kimse seçilmedi.','err'); return; }
+    var us=selected(); if(!us.length){ setS('dbStatus','Kimse se\u00e7ilmedi.','err'); return; }
     await fetch('/api/db/delete-bulk',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({usernames:us})});
-    setS('dbStatus', us.length+' kayıt silindi','ok'); loadDb();
+    setS('dbStatus', us.length+' kay\u0131t silindi','ok'); loadDb();
   }
   async function requeue(u){ await fetch('/api/db/requeue',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u})}); loadDb(); }
   async function delRow(u){ await fetch('/api/db/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u})}); loadDb(); }
 
-  async function loadSent(){ const r=await fetch('/api/sent-emails'); const d=await r.json();
-    document.querySelector('#sentTbl tbody').innerHTML=(d.rows||[]).map(x=>'<tr><td>'+esc(x.nickname||x.username)+'</td><td>'+esc(x.email||'')+'</td><td>'+esc(x.sent_account||'')+'</td><td>'+esc((x.sent_at||'').slice(0,16).replace('T',' '))+'</td></tr>').join('')||'<tr><td colspan=4 style="color:var(--muted)">Henüz gönderilmedi</td></tr>'; }
+  async function loadSent(){ var r=await fetch('/api/sent-emails'); var d=await r.json();
+    document.querySelector('#sentTbl tbody').innerHTML=(d.rows||[]).map(function(x){ return '<tr><td>'+esc(x.nickname||x.username)+'</td><td>'+esc(x.email||'')+'</td><td>'+esc(x.sent_account||'')+'</td><td>'+esc((x.sent_at||'').slice(0,16).replace('T',' '))+'</td></tr>'; }).join('')||'<tr><td colspan="4" class="hint">Hen\u00fcz g\u00f6nderilmedi</td></tr>'; }
 
-  async function loadStats(){ const r=await fetch('/api/stats'); const d=await r.json(); const s=d.stats;
-    document.getElementById('kpis').innerHTML=[['Toplam',s.total],['Gönderilen',s.sent],['Yanıt',s.replied],['Yanıt Oranı',s.reply_rate+'%'],['Kuyruk',s.queued],['Email\'li',s.with_email],['Bugün Email',s.sent_today_email]].map(([l,n])=>'<div class="kpi"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>').join(''); }
+  async function loadStats(){ var r=await fetch('/api/stats'); var d=await r.json(); var s=d.stats;
+    document.getElementById('kpis').innerHTML=[['Toplam',s.total],['G\u00f6nderilen',s.sent],['Yan\u0131t',s.replied],['Yan\u0131t Oran\u0131',s.reply_rate+'%'],['Kuyruk',s.queued],['Email\'li',s.with_email],['Bug\u00fcn Email',s.sent_today_email]].map(function(p){ return '<div class="kpi"><div class="n">'+p[1]+'</div><div class="l">'+p[0]+'</div></div>'; }).join(''); }
 
   load(); pollStatus(); setInterval(pollStatus, 4000);
 </script>
