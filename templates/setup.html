@@ -28,6 +28,7 @@
   .btn { display:inline-flex; align-items:center; gap:8px; border:none; cursor:pointer; border-radius:11px; font-weight:700; font-size:14px; padding:12px 18px; color:white; background:linear-gradient(135deg,var(--accent),var(--accent-2)); }
   .btn:disabled { opacity:.5; cursor:not-allowed; }
   .btn.secondary { background:var(--panel-2); border:1px solid var(--border); }
+  .btn.small { padding:9px 13px; font-size:13px; }
   .btn.big { width:100%; justify-content:center; font-size:16px; padding:15px; }
   .acct { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; align-items:center; }
   .acct input { flex:1; min-width:120px; }
@@ -74,14 +75,22 @@
     <div class="row gap" style="margin-top:10px"><button class="btn secondary" onclick="addAcct()">+ Hesap ekle</button></div>
     <div class="row" style="margin-top:16px">
       <div><label>Ülke/dil</label><input id="t_countries" placeholder="Turkiye"></div>
-      <div><label>Hashtag'ler</label><input id="t_hashtags" placeholder="yemektarifi, gunlukvlog, kombin"></div>
+      <div><label>Dil (hashtag AI icin)</label><input id="t_lang" placeholder="tr" value="tr"></div>
     </div>
-    <div class="row">
+    <label>Hashtag'ler</label>
+    <textarea id="t_hashtags" placeholder="yemektarifi, gunlukvlog, kombin"></textarea>
+    <div class="row gap" style="margin-top:8px">
+      <input id="t_niche" placeholder="ipucu (ops.): kucuk isletme, yemek, moda..." style="flex:1">
+      <button class="btn secondary small" id="htBtn" onclick="genHashtags()">🧠 AI ile üret</button>
+    </div>
+    <div id="htStatus" class="status"></div>
+    <div class="row" style="margin-top:12px">
       <div><label>Min takipçi</label><input id="t_min" placeholder="3000"></div>
       <div><label>Max takipçi</label><input id="t_max" placeholder="80000"></div>
-      <div><label>Tur başı hedef</label><input id="t_target" placeholder="60"></div>
+      <div><label>Kombo başı hedef</label><input id="t_target" placeholder="60" value="60"></div>
       <div><label>Günlük email/hesap</label><input id="t_daily" placeholder="30"></div>
     </div>
+    <p class="hint">Not: her hashtag icin ayri ayri <b>60 kişi</b> taranir; bir Apify anahtari bitince otomatik diğerine geçer.</p>
   </div>
 
   <div class="card">
@@ -154,8 +163,26 @@
       email_accounts:accts.filter(a=>a.email&&a.password), targeting:targeting() };
     const r=await fetch('/api/setup/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const d=await r.json();
-    if(d.ok){ setS('saveStatus','Kaydedildi ✅  Apify:'+d.apify+' · Groq:'+d.groq+' · Hesap:'+d.accounts,'ok'); document.getElementById('apify').value=''; document.getElementById('groq').value=''; load(); }
-    else setS('saveStatus','Hata: '+(d.error||'?'),'err');
+    if(d.ok){ setS('saveStatus','Kaydedildi ✅  Apify:'+d.apify+' · Groq:'+d.groq+' · Hesap:'+d.accounts,'ok'); document.getElementById('apify').value=''; document.getElementById('groq').value=''; load(); return true; }
+    setS('saveStatus','Hata: '+(d.error||'?'),'err'); return false;
+  }
+
+  async function genHashtags(){
+    const btn=document.getElementById('htBtn'); btn.disabled=true;
+    setS('htStatus','Önce anahtarlar kaydediliyor...');
+    await save();
+    setS('htStatus','AI hashtag üretiyor...');
+    const body={ lang:(document.getElementById('t_lang').value.trim()||'tr'),
+      countries:document.getElementById('t_countries').value.split(',').map(s=>s.trim()).filter(Boolean),
+      niche:document.getElementById('t_niche').value.trim(), count:14 };
+    try{
+      const r=await fetch('/api/setup/hashtags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const d=await r.json();
+      if(!d.ok){ setS('htStatus','Hata: '+(d.error||'?'),'err'); btn.disabled=false; return; }
+      document.getElementById('t_hashtags').value=(d.hashtags||[]).join(', ');
+      setS('htStatus',(d.hashtags||[]).length+' hashtag üretildi ✅ (kaydetmeyi unutma)','ok');
+    }catch(e){ setS('htStatus','Hata: '+e.message,'err'); }
+    btn.disabled=false;
   }
 
   async function check(){
@@ -181,7 +208,7 @@
       if(e.data==='[DONE]'){ es.close(); btn.disabled=false; setS('deployStatus','Bitti. Panel: https://'+app+'.fly.dev  ·  Checker: /checker','ok'); return; }
       term.textContent += e.data+'\n'; term.scrollTop=term.scrollHeight;
     };
-    es.onerror=()=>{ es.close(); btn.disabled=false; setS('deployStatus','Bağlantı kesildi. Terminalden `./deploy.sh` ile de deneyebilirsin.','err'); };
+    es.onerror=()=>{ es.close(); btn.disabled=false; setS('deployStatus','Bağlantı kesildi. Terminalden `bash deploy.sh` ile de deneyebilirsin.','err'); };
   }
 
   load();
