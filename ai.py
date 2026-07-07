@@ -22,7 +22,6 @@ CJK_RE = re.compile(r"[\u3000-\u9fff\u3040-\u30ff\uac00-\ud7af]")
 ARABIC_RE = re.compile(r"[\u0600-\u06ff]")
 LATIN_RE = re.compile(r"[a-zA-Z]")
 
-# Ciktida ASLA olmamasi gereken bozuk/kalip ifadeler (dil karismasi isareti).
 BAD_PHRASES = [
     "baglantiim kuruldu", "ba\u011flant\u0131\u0131m kuruldu", "seninle baglanti",
     "olarak seninle", "connected with you as", "i connected with",
@@ -30,10 +29,8 @@ BAD_PHRASES = [
     "as someone who", "i wanted to reach",
 ]
 
-# Turkce metinde bunlar cok gecerse -> aslinda Ingilizce yazmis demektir.
 EN_STOPWORDS = {"the", "and", "your", "you", "with", "for", "this", "that", "content",
                 "videos", "really", "love", "built", "tool", "would", "feedback", "reaching"}
-# Ingilizce metinde bunlar cok gecerse -> aslinda Turkce yazmis demektir.
 TR_STOPWORDS = {"ve", "bir", "icin", "i\u00e7in", "videolarini", "senin", "cok", "\u00e7ok",
                 "yaptim", "yapt\u0131m", "merhaba", "selam", "arac", "ara\u00e7", "gelistirdim"}
 
@@ -110,29 +107,22 @@ class AIBrain:
         if not text or len(text) < 15:
             return False
         low = text.lower()
-        # Yabanci alfabe sizmasi
         if CJK_RE.search(text):
             return False
         if lang != "ar" and ARABIC_RE.search(text):
             return False
-        if lang == "ar" and LATIN_RE.search(text) and len(LATIN_RE.findall(text)) > 8:
+        if lang == "ar" and len(LATIN_RE.findall(text)) > 8:
             return False
-        # Bilinen bozuk kaliplar
         for bad in BAD_PHRASES:
             if bad in low:
                 return False
-        # Dil karismasi: kelime bazli
         words = set(re.findall(r"[a-z\u00e7\u011f\u0131\u00f6\u015f\u00fc]+", low))
-        if lang == "tr":
-            en_hits = len(words & EN_STOPWORDS)
-            if en_hits >= 3:  # Turkce isteyip Ingilizce yazmis
-                return False
+        if lang == "tr" and len(words & EN_STOPWORDS) >= 3:
+            return False
         if lang == "en":
-            tr_hits = len(words & TR_STOPWORDS)
-            if tr_hits >= 2:
+            if len(words & TR_STOPWORDS) >= 2:
                 return False
-            # Turkce'ye ozgu harfler Ingilizce metinde olmamali
-            if re.search(r"[\u011f\u0131\u015f\u00e7\u00f6\u00fc]", low) and len(re.findall(r"[\u011f\u0131\u015f]", low)) > 2:
+            if len(re.findall(r"[\u011f\u0131\u015f]", low)) > 2:
                 return False
         return True
 
@@ -181,11 +171,10 @@ FORBIDDEN: 'unlock', 'game-changer', corporate tone, 'I wanted to reach out', ov
 Write ONLY the message text in {lang_name}."""
         out = _tidy(self._chat(system, user, temperature=0.6, max_tokens=380))
         if not self._is_clean(out, lang):
-            # Bir kez daha, daha dusuk sicaklikla ve daha sert uyariyla dene
             out = _tidy(self._chat(system, user + f"\n\nONEMLI: Kesinlikle SADECE {lang_name}. Onceki denemede dil karisti.",
                                    temperature=0.3, max_tokens=380))
             if not self._is_clean(out, lang):
-                raise RuntimeError("AI cikti dil kontrolunden gecemedi")  # app.py temiz fallback'e duser
+                raise RuntimeError("AI cikti dil kontrolunden gecemedi")
         return out
 
     def generate_subject(self, creator, lang="tr") -> str:
@@ -198,9 +187,9 @@ Write ONLY the message text in {lang_name}."""
                 f"TikTok creator '{name}' (bio: {bio or 'n/a'}). Casual, human, references them or their content. "
                 f"Output ONLY the subject line.")
         try:
-            s = _tidy(self._chat(system, user, temperature=0.7, max_tokens=30))
-            s = s.splitlines()[0].strip().strip('"\'') if s else ""
-            if s and self._is_clean(s + " ok ok", lang):  # kaba dil kontrolu
+            s = self._chat(system, user, temperature=0.7, max_tokens=30)
+            s = _tidy(s.splitlines()[0]) if s else ""
+            if s and self._is_clean(s + " ok ok ok", lang):
                 return s[:80]
         except QuotaError:
             raise
@@ -235,7 +224,7 @@ Write ONLY the message text in {lang_name}."""
         return out[:count]
 
     def analyze_reply(self, dm_sent, reply_text, lang="tr") -> dict:
-        user = (f"Creator replied. MY DM: {dm_sent}\nREPLY: {reply_text}\n"
+        user = (f"Creator replied. MY EMAIL: {dm_sent}\nREPLY: {reply_text}\n"
                 'Return STRICT JSON only: {"sentiment":"pos"|"neu"|"neg","category":"interested"|"question"|"not_interested"|"spammy","suggested_reply":"short human reply in their language"}')
         return _safe_json(self._chat("Return only strict JSON.", user, 0.5, 200), {"sentiment": "neu", "category": "question", "suggested_reply": ""})
 
@@ -254,7 +243,6 @@ Write ONLY the message text in {lang_name}."""
 
 def _fallback_subject(creator, lang="tr") -> str:
     name = creator.get("nickname") or creator.get("username", "")
-    t(lang) if False else None
     subs = {
         "tr": f"{name}, icerigin cok iyi",
         "en": f"{name}, love your content",
@@ -263,7 +251,7 @@ def _fallback_subject(creator, lang="tr") -> str:
         "fr": f"{name}, j'adore ton contenu",
         "ar": f"{name}",
     }
-    return subs.get(lang, subs["en"]).strip().strip(",").strip() or "hey"
+    return (subs.get(lang, subs["en"]).strip().strip(",").strip()) or "hey"
 
 def _tidy(text: str) -> str:
     t = (text or "").strip()
