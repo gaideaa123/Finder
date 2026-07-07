@@ -1,9 +1,8 @@
-"""CaptionAI Finder - Groq AI + Apify + coklu hesap Email + CRM + Auto dongu.
+"""CaptionAI Finder - Groq AI + Apify + coklu kanal Email + CRM + Auto dongu.
 
-Her creator'a KENDI dilinde (finder.py tespit eder), kisiye ozel, HATASIZ email.
-Gonderilenler database'de varsayilan gizli ama tekrar ASLA gonderilmez.
-
-Sayfalar:  /  panel (anahtar+baslat, database, gonderilenler, analiz)
+Her creator'a KENDI dilinde (finder.py tespit eder), kisiye ozel, HATASIZ,
+profesyonel email. Gonderim: Gmail (dusuk hacim) YA DA Amazon SES (yuksek hacim).
+Gonderilenler database'de gizli ama tekrar ASLA gonderilmez.
 """
 
 import json
@@ -39,6 +38,8 @@ STATE = {
     "apify_tokens": [],
     "groq_keys": [],
     "accounts": [],
+    "ses": {},          # {smtp_host, smtp_port, smtp_user, smtp_pass, from_email, from_name}
+    "sender": "gmail",  # "gmail" | "ses"
     "auto": {"running": False, "found": 0, "rounds": 0, "last": "", "stop": False, "combo": ""},
     "monitor": {"ts": 0, "apify": [], "groq": []},
 }
@@ -47,12 +48,8 @@ _auto_lock = threading.Lock()
 _monitor_started = False
 
 FALLBACK = {
-    "tr": "Selam {name}, videolarini bir suredir takip ediyorum ve tarzini gercekten begeniyorum. 16 yasindayim ve tek basima CaptionAI adinda kucuk bir arac gelistirdim: video konusunu yaziyorsun, saniyeler icinde hazir caption oneriyor. Denersen fikrini cok merak ederim: {url}",
-    "en": "Hey {name}, I've been following your videos for a while and I really like your style. I'm 16 and I built a little tool called CaptionAI on my own: you type your video topic and it gives ready captions in seconds. Would love your honest take if you try it: {url}",
-    "es": "Hola {name}, sigo tus videos desde hace un tiempo y me encanta tu estilo. Tengo 16 anos e hice una pequena herramienta llamada CaptionAI: escribes el tema de tu video y te da captions listos en segundos. Me encantaria tu opinion si la pruebas: {url}",
-    "de": "Hey {name}, ich verfolge deine Videos schon eine Weile und mag deinen Stil sehr. Ich bin 16 und habe allein ein kleines Tool namens CaptionAI gebaut: du gibst dein Videothema ein und bekommst in Sekunden fertige Captions. Uber dein ehrliches Feedback wurde ich mich freuen: {url}",
-    "fr": "Hey {name}, je suis tes videos depuis un moment et j'aime beaucoup ton style. J'ai 16 ans et j'ai cree seul un petit outil appele CaptionAI : tu tapes le sujet de ta video et il te donne des legendes pretes en quelques secondes. Ton avis honnete m'interesserait si tu l'essaies : {url}",
-    "ar": "\u0645\u0631\u062d\u0628\u0627 {name}\u060c \u0623\u062a\u0627\u0628\u0639 \u0641\u064a\u062f\u064a\u0648\u0647\u0627\u062a\u0643 \u0648\u0623\u062d\u0628 \u0623\u0633\u0644\u0648\u0628\u0643. \u0639\u0645\u0631\u064a 16 \u0648\u0635\u0646\u0639\u062a \u0623\u062f\u0627\u0629 \u0627\u0633\u0645\u0647\u0627 CaptionAI: \u062a\u0643\u062a\u0628 \u0645\u0648\u0636\u0648\u0639 \u0627\u0644\u0641\u064a\u062f\u064a\u0648 \u0648\u062a\u062d\u0635\u0644 \u0639\u0644\u0649 \u0643\u0627\u0628\u0634\u0646\u0627\u062a \u062c\u0627\u0647\u0632\u0629 \u0628\u062b\u0648\u0627\u0646\u064a. \u064a\u0647\u0645\u0646\u064a \u0631\u0623\u064a\u0643: {url}",
+    "tr": "Selam {name},\n\nVideolarini bir suredir takip ediyorum ve tarzini gercekten cok begeniyorum. Caption yazmak icerik ureticilerin en cok vakit kaybettigi seylerden biri, en azindan benim icin oyleydi.\n\n16 yasindayim ve tek basima CaptionAI adinda kucuk bir arac gelistirdim: video konusunu yaziyorsun, saniyeler icinde 4 hazir caption oneriyor. Denersen fikrini cok merak ederim:\n{url}\n\nSevgiler",
+    "en": "Hi {name},\n\nI've been following your videos for a while and I genuinely love your style. Writing captions is one of the things creators lose the most time on, at least that was true for me.\n\nI'm 16 and I built a little tool on my own called CaptionAI: you type your video topic and it gives 4 ready captions in seconds. I'd love your honest take if you try it:\n{url}\n\nBest",
 }
 
 def _fallback(creator):
@@ -92,8 +89,8 @@ def _email_subject(creator):
             pass
     name = creator.get("nickname") or creator.get("username", "")
     lang = creator.get("lang", "en")
-    return (f"{name}, videolarin icin kucuk bir fikir" if lang == "tr"
-            else f"{name}, a small idea for your videos")
+    return (f"{name}, videolarina dair kucuk bir fikir" if lang == "tr"
+            else f"{name}, a quick idea for your videos")
 
 def _run_search(data):
     tokens = STATE["apify_tokens"] or ([data.get("apify_token")] if data.get("apify_token") else [])
@@ -126,8 +123,6 @@ def _run_search(data):
     return None, last or "Tum Apify token'lar tukendi", True
 
 def _finalize(rows, countries):
-    # NOT: dil artik finder.py'de her creator'in KENDI metninden belirleniyor.
-    # Arama ulkesini dayatMIYORUZ; yabanciya yanlis dil gitmesin.
     known_u, known_e = crm.known_usernames(), crm.known_emails()
     brain = _brain()
     learned = ""
@@ -217,18 +212,21 @@ def api_search():
     return jsonify({"ok": True, "count": len(fresh), "creators": fresh})
 
 def _campaign_cfg():
+    sender = STATE.get("sender") or "gmail"
+    # SES varsayilan gunluk limit 5000; Gmail hesap basi 30 (env ile degistirilebilir).
+    daily = int(os.environ.get("DAILY_LIMIT_SES", 5000)) if sender == "ses" else int(os.environ.get("DAILY_LIMIT", 30))
     return {
+        "sender": sender,
         "provider": os.environ.get("EMAIL_PROVIDER", "gmail"),
         "accounts": STATE["accounts"],
+        "ses": STATE.get("ses") or {},
         "subject": os.environ.get("EMAIL_SUBJECT", "videolarin icin ufak bir sey"),
-        "daily_limit": int(os.environ.get("DAILY_LIMIT", 30)),
+        "daily_limit": daily,
         "build_body": _email_body,
         "build_subject": _email_subject,
     }
 
 def _start_email():
-    if not STATE["accounts"]:
-        return {"ok": False, "error": "Once email hesabi ekle."}
     return start_email_campaign(_campaign_cfg())
 
 def _combos_from(hashtags):
@@ -352,7 +350,8 @@ def api_control_status():
         return jsonify({"ok": False, "error": "auth"}), 403
     return jsonify({"ok": True, "auto": STATE["auto"], "email": email_status(),
                     "keys": {"apify": len(STATE["apify_tokens"]), "groq": len(STATE["groq_keys"]),
-                             "accounts": len(STATE["accounts"])}})
+                             "accounts": len(STATE["accounts"]), "sender": STATE.get("sender", "gmail"),
+                             "ses": bool((STATE.get("ses") or {}).get("from_email"))}})
 
 @app.route("/api/control/reload", methods=["POST"])
 def api_control_reload():
@@ -360,7 +359,8 @@ def api_control_reload():
         return jsonify({"ok": False, "error": "auth"}), 403
     bootstrap_from_env()
     return jsonify({"ok": True, "apify": len(STATE["apify_tokens"]),
-                    "groq": len(STATE["groq_keys"]), "accounts": len(STATE["accounts"])})
+                    "groq": len(STATE["groq_keys"]), "accounts": len(STATE["accounts"]),
+                    "sender": STATE.get("sender")})
 
 @app.route("/api/control/start", methods=["POST"])
 def api_control_start():
@@ -371,8 +371,11 @@ def api_control_start():
         return jsonify({"ok": False, "error": "Apify token yok. Once kaydet."}), 400
     if not STATE["groq_keys"]:
         return jsonify({"ok": False, "error": "Groq key yok. Once kaydet."}), 400
-    if not STATE["accounts"]:
-        return jsonify({"ok": False, "error": "Email hesabi yok. Once ekle."}), 400
+    if STATE.get("sender") == "ses":
+        if not (STATE.get("ses") or {}).get("from_email"):
+            return jsonify({"ok": False, "error": "SES secili ama ayarlar eksik. SES alanlarini doldur."}), 400
+    elif not STATE["accounts"]:
+        return jsonify({"ok": False, "error": "Email hesabi yok. Once ekle (ya da SES sec)."}), 400
     cfg = _targeting_config()
     if not cfg["hashtags"]:
         return jsonify({"ok": False, "error": "Hashtag yok. Hedeflemeyi doldur (AI ile uretebilirsin)."}), 400
@@ -470,8 +473,11 @@ def api_email_send_one():
     u = (data.get("username") or "").strip()
     if not u:
         return jsonify({"ok": False, "error": "username gerekli"}), 400
-    if not STATE["accounts"]:
-        return jsonify({"ok": False, "error": "Once email hesabi ekle."}), 400
+    if STATE.get("sender") == "ses":
+        if not (STATE.get("ses") or {}).get("from_email"):
+            return jsonify({"ok": False, "error": "SES ayarlari eksik."}), 400
+    elif not STATE["accounts"]:
+        return jsonify({"ok": False, "error": "Once email hesabi ekle (ya da SES sec)."}), 400
     c = crm.get_contact(u)
     if not c:
         return jsonify({"ok": False, "error": "Kisi bulunamadi."}), 404
@@ -487,7 +493,6 @@ def api_stats():
 
 @app.route("/api/db")
 def api_db():
-    # hide_sent=1 -> gonderilen/yanitlanan gizlenir (varsayilan panelde acik).
     hide = request.args.get("hide_sent") == "1"
     excl = ["sent", "replied"] if hide else None
     return jsonify({"ok": True, "rows": crm.list_contacts(
@@ -562,6 +567,18 @@ def _accounts_from(items):
             out.append({"email": e, "password": p, "from_name": (a.get("from_name") or "").strip()})
     return out
 
+def _ses_from(d):
+    s = d or {}
+    out = {
+        "smtp_host": (s.get("smtp_host") or "").strip(),
+        "smtp_port": int(s.get("smtp_port") or 587),
+        "smtp_user": (s.get("smtp_user") or "").strip(),
+        "smtp_pass": (s.get("smtp_pass") or "").strip(),
+        "from_email": (s.get("from_email") or "").strip(),
+        "from_name": (s.get("from_name") or "").strip(),
+    }
+    return out
+
 def bootstrap_from_env():
     STATE["apify_tokens"] = _split(os.environ.get("APIFY_TOKENS", ""))
     STATE["groq_keys"] = _split(os.environ.get("GROQ_KEYS", ""))
@@ -571,6 +588,19 @@ def bootstrap_from_env():
             STATE["accounts"] = _accounts_from(json.loads(raw))
         except Exception:
             pass
+    # SES + sender env'den
+    if os.environ.get("SES_FROM_EMAIL"):
+        STATE["ses"] = _ses_from({
+            "smtp_host": os.environ.get("SES_SMTP_HOST"),
+            "smtp_port": os.environ.get("SES_SMTP_PORT"),
+            "smtp_user": os.environ.get("SES_SMTP_USER"),
+            "smtp_pass": os.environ.get("SES_SMTP_PASS"),
+            "from_email": os.environ.get("SES_FROM_EMAIL"),
+            "from_name": os.environ.get("SES_FROM_NAME"),
+        })
+    if os.environ.get("SENDER"):
+        STATE["sender"] = os.environ.get("SENDER")
+    # secrets.local.json
     for p in ("secrets.local.json", os.path.join(os.environ.get("DATA_DIR", "."), "secrets.local.json")):
         if not os.path.exists(p):
             continue
@@ -585,6 +615,10 @@ def bootstrap_from_env():
             STATE["groq_keys"] = _norm_list(d.get("groq_keys"))
         if not STATE["accounts"] and d.get("email_accounts"):
             STATE["accounts"] = _accounts_from(d.get("email_accounts"))
+        if not (STATE.get("ses") or {}).get("from_email") and d.get("ses"):
+            STATE["ses"] = _ses_from(d.get("ses"))
+        if d.get("sender"):
+            STATE["sender"] = d.get("sender")
         break
 
 bootstrap_from_env()
