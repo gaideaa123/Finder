@@ -1,53 +1,47 @@
-# CaptionAI Finder · AI Panel 🧠
+# CaptionAI Finder · Email Autopilot 🧠✉️
 
-PC'nde local çalışan, AI destekli içerik üretici bulma + outreach paneli.
-TikTok'ta creator bulur, **Groq (Llama 3.3 70B) ile insansı DM** hazırlar, gelen
-yanıtları analiz edip **öğrenir**, email'i olanlara **otomatik mail** atar, hepsini
-bir **CRM**'de takip eder.
+TikTok'ta **CaptionAI**'a uygun icerik ureticilerini bulan, email'lerini cikaran ve
+**Groq (Llama 3.3 70B)** ile **hiper-ozel** soguk email gonderen **tam otomatik** arac.
+
+> **DM YOK.** Sadece: **bul → email cikar → Groq ile ozel mail yaz → gonder → tekrarla.**
+> Headless calisir; PC'ni acik tutmana gerek yok, ucretsiz bir server'da 7/24 doner.
 
 ## Mimari
 
-| Dosya | Görev |
+| Dosya | Gorev |
 | --- | --- |
-| `finder.py` | Apify ile hashtag/ülke bazlı creator bulma (çoklu token) |
-| `ai.py` | Groq / Llama 3.3 70B: insansı DM üretimi, yanıt analizi, öğrenme |
-| `crm.py` | SQLite: kuyruk, durum, yanıt oranı, email dedup, tekrar bulmama |
-| `emailer.py` | Otomatik email (insan hızında, günlük limit, çoklu hesap) |
-| `app.py` | Hepsini birleştiren Flask sunucusu + panel |
+| `worker.py` | **Autopilot** – surekli dongu: bul → email cikar → Groq mail → gonder |
+| `finder.py` | Apify ile hashtag/ulke bazli creator bulma (coklu token). `exclude_usernames` ile **ayni kisileri getirmez** |
+| `ai.py` | Groq / Llama 3.3 70B: hiper-ozel email metni uretimi |
+| `emailer.py` | Coklu hesap otomatik email (gunluk limit + insani gecikme + email dedup) |
+| `crm.py` | SQLite: kuyruk, durum, dedup, gonderim gecmisi. DB yolu `DB_FILE` env'den |
+| `app.py` | (Opsiyonel) local izleme/panel |
 
-## Neden bu tasarım (dürüst)
+## "Surekli ayni kisileri getiriyor" — cozuldu
 
-- **TikTok DM'i otomatik gönderilmez.** TikTok bunu resmi API ile desteklemiyor;
-  otomatik gönderim hesabını banlatır. Bu yüzden DM = **tek tık asistan**
-  (metin kopyalanır + profil açılır, sen gönderirsin, insani hız, ban riski düşük).
-- **Email = tam otomatik.** Bu kanal yasal ve bansız; PC açıkken kendisi atar.
-- Anahtar bitince panel uyarır, yeni anahtarı girersin, kaldığı yerden devam.
+Her tur, veritabanindaki **bilinen tum kullanicilar aramadan haric tutulur**
+(`exclude_usernames`) ve hashtag'ler **rotasyonla** degisir. Boylece her tur
+**gercekten yeni** kisiler yuzeye cikar. DB kalici diskte durdugu icin (Fly volume)
+bu hafiza **restart'ta da silinmez**.
 
-## Kurulum
+## 7/24 ucretsiz kurulum
 
-```bash
-pip install -r requirements.txt
-python app.py
-```
+Tum adimlar: **[DEPLOY.md](DEPLOY.md)** (Fly.io, kalici disk, secret'lar).
+Ozet: `fly launch --no-deploy` → `fly volumes create finder_data` → `fly secrets set ...` → `fly deploy` → `fly logs`.
 
-Tarayıcıda: **http://127.0.0.1:5000**
+## Ayarlar (environment variable)
 
-## Anahtarlar (açılışta modal sorar)
+Hepsi `.env.example`'da. En onemlileri:
 
-- **Apify:** [console.apify.com/account/integrations](https://console.apify.com/account/integrations) → API token (creator bulma).
-- **Groq (AI beyni):** [console.groq.com/keys](https://console.groq.com/keys) → ücretsiz API key.
-  Model: `llama-3.3-70b-versatile`. Ücretsiz katman yüksek limitli (~günde on binlerce istek).
-  Çoklu key girebilirsin: biri kota dolunca otomatik sonrakine geçer.
+- `APIFY_TOKENS` — Apify API token(lar)i (creator bulma). console.apify.com
+- `GROQ_KEYS` — Groq API key(ler)i. console.groq.com/keys
+- `EMAIL_ACCOUNTS` — JSON: `[{"email":"..","password":"gmail app sifresi","from_name":"Ad"}]`
+- `HASHTAGS`, `COUNTRIES`, `MIN_FOLLOWERS`, `MAX_FOLLOWERS`
+- `DAILY_LIMIT_PER_ACCOUNT`, `EMAIL_SUBJECT`, `SITE_URL`
+- `ROUND_INTERVAL_SECONDS`, `IDLE_INTERVAL_SECONDS`
 
-## Kullanım
+## Guvenlik
 
-1. **Ara:** ülke/dil + hashtag seç, bul. Sonuçlar AI ile DM'i hazırlanıp CRM kuyruğuna düşer (tekrar bulma yok).
-2. **DM Kuyruğu:** her kartta insansı DM hazır. **DM At** = kopyala + profil aç (sen gönder). 🧠 Yeniden = AI farklı DM üretir. 📝 Yanıt = gelen cevabı gir, AI sınıflandırır + cevap önerir. × = listeden çıkar.
-3. **Email Otomasyon:** Gmail uygulama şifresiyle otomatik kampanya (günlük limit + insani gecikme, çoklu hesap).
-4. **Analiz:** yanıt oranı, dile göre performans, kimden cevap geldiği, AI duygu. Sistem bu veriden öğrenip DM'leri iyileştirir.
-
-## Güvenlik notları
-
-- Gmail'de **normal şifre değil, uygulama şifresi** kullan (iptal edilebilir): [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords).
-- Anahtarlar ve veriler sadece kendi PC'nde (`finder_crm.db` local SQLite). `config.json`, DB ve `seen_history.json` `.gitignore`'dadır; repoya gönderme.
-- Topladığın verileri sadece kişiye özel outreach için kullan.
+- Gmail'de **normal sifre degil, uygulama sifresi**: myaccount.google.com/apppasswords
+- Anahtarlar koda YAZILMAZ; `fly secrets` / env ile verilir. `config.json`, DB ve `.env` `.gitignore`'da.
+- Topladigin verileri sadece kisiye ozel outreach icin kullan; soguk email gonderirken bulundugun ulkenin kurallarina (KVKK/GDPR/CAN-SPAM) dikkat et.

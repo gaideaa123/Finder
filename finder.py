@@ -1,4 +1,8 @@
-"""CaptionAI Finder - Apify tabanli creator bulma (coklu token, 16GB, 6 dil)."""
+"""CaptionAI Finder - Apify tabanli creator bulma (coklu token, 16GB, 6 dil).
+
+Email-only autopilot icin: cfg['exclude_usernames'] verilirse o kullanicilar
+toplama sirasinda atlanir -> her tur YENI kisiler doner (ayni kisiler gelmez).
+"""
 
 import json
 import os
@@ -26,7 +30,7 @@ COUNTRY_LANG = {
 LANG_MAIN_COUNTRY = {"tr": "TR", "en": "US", "es": "ES", "de": "DE", "fr": "FR", "ar": "SA"}
 
 COUNTRY_NAME_TO_ISO = {
-    "turkiye": "TR", "turkey": "TR", "tr": "TR",
+    "turkiye": "TR", "türkiye": "TR", "turkey": "TR", "tr": "TR",
     "amerika": "US", "abd": "US", "usa": "US", "united states": "US", "us": "US", "ingilizce": "US", "english": "US",
     "ingiltere": "GB", "uk": "GB", "united kingdom": "GB", "gb": "GB",
     "almanya": "DE", "germany": "DE", "de": "DE", "almanca": "DE", "deutsch": "DE",
@@ -42,9 +46,9 @@ COUNTRY_NAME_TO_ISO = {
     "misir": "EG", "egypt": "EG", "eg": "EG",
 }
 
-TURKISH_CHARS = set("\u0131\u015f\u011f\u00fc\u00f6\u00e7\u0130")
-GERMAN_CHARS = set("\u00e4\u00f6\u00fc\u00df")
-SPANISH_CHARS = set("\u00f1\u00bf\u00a1")
+TURKISH_CHARS = set("ışğüöçİ")
+GERMAN_CHARS = set("äöüß")
+SPANISH_CHARS = set("ñ¿¡")
 ARABIC_RE = re.compile(r"[\u0600-\u06FF]")
 EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
 
@@ -105,7 +109,7 @@ def detect_lang_from_text(text: str) -> Optional[str]:
     if any(ch in SPANISH_CHARS for ch in text):
         return "es"
     low = text.lower()
-    tokens = set(re.findall(r"[a-z\u00e0\u00e2\u00e4\u00e7\u00e9\u00e8\u00ea\u00eb\u00ee\u00ef\u00f4\u00f6\u00f9\u00fb\u00fc\u00f1]+", low))
+    tokens = set(re.findall(r"[a-zàâäçéèêëîïôöùûüñ]+", low))
     best_lang, best_hits = None, 0
     for lang, words in LANG_WORDS.items():
         hits = len(tokens & words)
@@ -240,6 +244,10 @@ def find_creators(cfg: dict) -> List[dict]:
     skip_seen = bool(cfg.get("skip_seen", True))
     apify_memory = int(cfg.get("apify_memory", 16384))
 
+    # AYNI KISILERI GETIRME: cagiran (worker) bilinen kullanicilari verir,
+    # bunlar toplama sirasinda atlanir -> her tur genuinely YENI kisiler.
+    exclude = {str(u).lower() for u in cfg.get("exclude_usernames", []) if u}
+
     wanted = set()
     for c in cfg.get("countries", []) or []:
         iso = country_to_iso(c)
@@ -249,7 +257,8 @@ def find_creators(cfg: dict) -> List[dict]:
 
     history = load_history() if skip_seen else set()
 
-    max_results = max(int(target * 6), target + 120)
+    # Genis tara ki bilinenleri eledikten sonra yeni kisiler yuzeye ciksin.
+    max_results = max(int(target * 8), target + 200)
     actor_input = cfg.get("apify_input") or {
         "hashtags": hashtags,
         "min_followers": min_f,
@@ -291,7 +300,10 @@ def find_creators(cfg: dict) -> List[dict]:
             rec = normalize_item(raw)
             if not rec or rec["username"] in matched:
                 continue
-            if skip_seen and rec["username"].lower() in history:
+            uname = rec["username"].lower()
+            if uname in exclude:          # zaten bilinen kisi -> atla (AYNI KISI GELMEZ)
+                continue
+            if skip_seen and uname in history:
                 continue
             f = rec["followers"]
             if f and (f < min_f or f > max_f):

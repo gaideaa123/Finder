@@ -1,0 +1,19 @@
+# Fly.io - ucretsiz 7/24 headless autopilot.
+# Kurulum icin: DEPLOY.md
+app = "captionai-finder"
+primary_region = "fra"  # istersen: ams, cdg, iad...
+
+[build]
+
+[env]
+  DB_FILE = "/data/finder_crm.db"
+
+# Kalici disk: dedup + gonderim gecmisi restart'ta korunur.
+[mounts]
+  source = "finder_data"
+  destination = "/data"
+
+# HTTP servisi yok; bu bir arka plan worker'i.
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
