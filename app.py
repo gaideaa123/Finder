@@ -2,12 +2,13 @@
 
 Email-only autopilot: TikTok'ta creator bulur -> email'ini bulur -> Groq ile
 hiper-ozel EMAIL uretir -> otomatik gonderir. DM GONDERMEZ. Ayni kisiyi tekrar
-getirmez (CRM dedup + arama sirasinda eleme). Server'da 7/24 calisabilir (env + AUTOSTART).
+getirmez (CRM dedup + arama sirasinda eleme).
 
-Sayfalar:
-  /         panel
-  /checker  Apify + Groq bakiye/kullanim
-  /setup    kurulum GUI (anahtar gir + test + tek tusla deploy) - sadece local
+Max performans: HER hashtag kombinasyonu icin hedef 60 kisi taranir; bir Apify
+token/kota bitince otomatik digerine gecer. Anahtarlar arka planda SUREKLI
+kontrol edilir (monitor).
+
+Sayfalar:  /  panel  ·  /checker bakiye  ·  /setup kurulum GUI (local)
 """
 
 import json
@@ -39,15 +40,20 @@ for _mod, _bp in (("checker", "checker_bp"), ("setup", "setup_bp")):
 
 SITE_URL = os.environ.get("SITE_URL", "thecaptionai.com")
 
+# Kombinasyon basina hedef (istenen: her hashtag kombosu icin 60 kisi)
+PER_COMBO_TARGET = int(os.environ.get("PER_COMBO_TARGET", 60))
+
 STATE = {
     "apify_tokens": [],
     "groq_keys": [],
     "accounts": [],
-    "auto": {"running": False, "found": 0, "rounds": 0, "last": "", "stop": False},
+    "auto": {"running": False, "found": 0, "rounds": 0, "last": "", "stop": False, "combo": ""},
+    "monitor": {"ts": 0, "apify": [], "groq": []},
 }
 
 # Auto dongusunu ayni anda iki kez baslatmayi engeller.
 _auto_lock = threading.Lock()
+_monitor_started = False
 
 PRODUCT_PITCH = os.environ.get("PRODUCT_PITCH") or (
     "CaptionAI: type your video topic and in 3 seconds get 4 viral-formula captions "
@@ -90,7 +96,6 @@ def _dm_for(creator, channel="email", brain=None, learned=""):
     return _fallback(creator, channel)
 
 def _email_body(creator):
-    # Emailer once STATE'teki hazir mesaji kullanir; yoksa burdan uretir.
     return _dm_for(creator, channel="email")
 
 def _run_search(data):
@@ -105,11 +110,9 @@ def _run_search(data):
         "countries": countries,
         "min_followers": data.get("min_followers", 3000),
         "max_followers": data.get("max_followers", 80000),
-        "target_count": data.get("target_count", 60),
-        # Email-only: varsayilan olarak sadece email'i olanlar.
+        "target_count": data.get("target_count", PER_COMBO_TARGET),
         "require_email": bool(data.get("require_email", True)),
         "strict_country": bool(data.get("strict_country", True)),
-        # TEK HAFIZA: dedup CRM'de. Boylece Database'den 'Sil'/'Tekrar Bul' gercekten etki eder.
         "skip_seen": False,
         # TEKRAR BUG FIX: CRM'de olanlari arama sirasinda ele -> her tur yeni kisi.
         "exclude_usernames": crm.known_usernames(),
@@ -122,7 +125,7 @@ def _run_search(data):
         except Exception as e:  # noqa: BLE001
             last = str(e)
             if any(k in last.lower() for k in ["401", "402", "403", "quota", "payment", "insufficient", "unauthorized", "token"]):
-                continue
+                continue  # bu token bitti -> sonraki token
             break
     return None, last or "Tum Apify token'lar tukendi", True
 
@@ -150,7 +153,6 @@ def _finalize(rows, countries):
             continue
         if em:
             seen_e.add(em)
-        # Email-only: dogrudan EMAIL govdesi uret (emailer bunu yeniden uretmeden kullanir).
         r["message"] = _dm_for(r, channel="email", brain=brain, learned=learned)
         fresh.append(r)
     crm.upsert_contacts(fresh)
@@ -187,6 +189,26 @@ def api_keys():
     return jsonify({"ok": True, "apify_count": len(STATE["apify_tokens"]),
                     "groq_count": len(STATE["groq_keys"]), "ai_ok": ai_ok, "ai_error": ai_err})
 
+@app.route("/api/hashtags/suggest", methods=["POST"])
+def api_hashtags():
+    """Groq ile nis/dil/ulkeye gore hashtag uretir."""
+    data = request.get_json(force=True) or {}
+    b = _brain()
+    if not b:
+        return jsonify({"ok": False, "error": "Once Groq key ekle."}), 400
+    try:
+        tags = b.generate_hashtags(
+            lang=data.get("lang", "tr"),
+            countries=data.get("countries") or [],
+            niche_hint=data.get("niche", ""),
+            count=int(data.get("count", 12)),
+        )
+        return jsonify({"ok": True, "hashtags": tags})
+    except QuotaError:
+        return jsonify({"ok": False, "error": "Groq kotasi bitti."}), 429
+    except Exception as e:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(e)[:150]}), 500
+
 @app.route("/api/email/accounts", methods=["POST"])
 def api_accounts():
     data = request.get_json(force=True) or {}
@@ -217,28 +239,50 @@ def _start_email():
         "build_body": _email_body,
     })
 
+def _combos_from(hashtags):
+    """Her hashtag'i ayri bir kombinasyon yapar (istenen: kombo basina 60 kisi).
+    HASHTAG_COMBO_SIZE>1 verilirse hashtag'leri gruplar halinde tarar."""
+    hs = [h for h in (hashtags or []) if h]
+    size = int(os.environ.get("HASHTAG_COMBO_SIZE", 1))
+    if size <= 1:
+        return [[h] for h in hs] or [[]]
+    return [hs[i:i + size] for i in range(0, len(hs), size)] or [[]]
+
 def _auto_loop(data):
-    STATE["auto"] = {"running": True, "found": 0, "rounds": 0, "last": "baslatildi", "stop": False}
-    # Server modunda kimse kalmayinca durma; bekle ve tekrar dene (7/24 kesintisiz).
+    STATE["auto"] = {"running": True, "found": 0, "rounds": 0, "last": "baslatildi", "stop": False, "combo": ""}
     idle_sleep = int(os.environ.get("IDLE_SLEEP", 0))
+    combos = _combos_from(data.get("hashtags"))
+    countries = data.get("countries") or []
     try:
         while not STATE["auto"]["stop"]:
-            rows, err, _ = _run_search(data)
-            if rows is None:
-                STATE["auto"]["last"] = "Apify: " + (err or "hata")
-                break
-            fresh = _finalize(rows, data.get("countries") or [])
-            STATE["auto"]["found"] += len(fresh)
-            STATE["auto"]["rounds"] += 1
-            STATE["auto"]["last"] = f"{len(fresh)} yeni bulundu, email atiliyor..."
-            _start_email()
-            while email_status().get("running"):
+            round_found = 0
+            for combo in combos:
                 if STATE["auto"]["stop"]:
                     break
-                time.sleep(3)
-            if len(fresh) == 0:
+                STATE["auto"]["combo"] = ",".join(combo) if combo else "(hepsi)"
+                # Her kombinasyon icin hedef 60
+                d2 = dict(data, hashtags=combo, target_count=PER_COMBO_TARGET)
+                rows, err, _ = _run_search(d2)
+                if rows is None:
+                    STATE["auto"]["last"] = "Apify: " + (err or "hata")
+                    if any(k in (err or "").lower() for k in ["token yok", "tukendi"]):
+                        # tum tokenlar bitti -> donguden cik
+                        raise RuntimeError(err or "apify bitti")
+                    continue
+                fresh = _finalize(rows, countries)
+                STATE["auto"]["found"] += len(fresh)
+                STATE["auto"]["rounds"] += 1
+                round_found += len(fresh)
+                STATE["auto"]["last"] = f"[{STATE['auto']['combo']}] {len(fresh)} yeni, email atiliyor..."
+                _start_email()
+                while email_status().get("running"):
+                    if STATE["auto"]["stop"]:
+                        break
+                    time.sleep(3)
+                time.sleep(2)
+            if round_found == 0:
                 if idle_sleep > 0 and not STATE["auto"]["stop"]:
-                    STATE["auto"]["last"] = f"Yeni kisi yok, {idle_sleep}s sonra tekrar denenecek."
+                    STATE["auto"]["last"] = f"Tum kombolarda yeni kisi yok, {idle_sleep}s sonra tekrar."
                     slept = 0
                     while slept < idle_sleep and not STATE["auto"]["stop"]:
                         time.sleep(3)
@@ -246,7 +290,8 @@ def _auto_loop(data):
                     continue
                 STATE["auto"]["last"] = "Yeni kisi kalmadi, durdu."
                 break
-            time.sleep(2)
+    except Exception as e:  # noqa: BLE001
+        STATE["auto"]["last"] = f"Durdu: {str(e)[:120]}"
     finally:
         STATE["auto"]["running"] = False
 
@@ -278,6 +323,56 @@ def api_auto_stop():
     STATE["auto"]["stop"] = True
     stop_campaign()
     return jsonify({"ok": True})
+
+# ---- Sürekli monitor (anahtarlari arka planda periyodik kontrol eder) ----
+
+def _monitor_tick():
+    try:
+        from checker import apify_check, groq_check
+    except Exception:
+        return
+    STATE["monitor"] = {
+        "ts": time.time(),
+        "apify": [apify_check(t) for t in STATE["apify_tokens"]],
+        "groq": [groq_check(k) for k in STATE["groq_keys"]],
+    }
+
+def _monitor_loop():
+    interval = int(os.environ.get("MONITOR_INTERVAL", 900))  # 15 dk
+    while True:
+        if STATE["apify_tokens"] or STATE["groq_keys"]:
+            try:
+                _monitor_tick()
+            except Exception:
+                pass
+        time.sleep(max(60, interval))
+
+def _start_monitor():
+    global _monitor_started
+    if _monitor_started:
+        return
+    _monitor_started = True
+    threading.Thread(target=_monitor_loop, daemon=True).start()
+
+@app.route("/api/monitor/status")
+def api_monitor_status():
+    m = STATE["monitor"]
+    # Hic tarama olmadiysa aninda bir kez tara
+    if not m.get("ts") and (STATE["apify_tokens"] or STATE["groq_keys"]):
+        try:
+            _monitor_tick()
+            m = STATE["monitor"]
+        except Exception:
+            pass
+    return jsonify({"ok": True, "monitor": m})
+
+@app.route("/api/monitor/refresh", methods=["POST"])
+def api_monitor_refresh():
+    try:
+        _monitor_tick()
+    except Exception as e:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(e)[:150]}), 500
+    return jsonify({"ok": True, "monitor": STATE["monitor"]})
 
 @app.route("/api/queue")
 def api_queue():
@@ -390,8 +485,7 @@ def _accounts_from(items):
     return out
 
 def bootstrap_from_env():
-    """Anahtarlari + email hesaplarini once env'den, sonra secrets.local.json'dan yukler.
-    Gizli dosya .gitignore'dadir; repoya asla gitmez."""
+    """Anahtarlari + email hesaplarini once env'den, sonra secrets.local.json'dan yukler."""
     STATE["apify_tokens"] = _split(os.environ.get("APIFY_TOKENS", ""))
     STATE["groq_keys"] = _split(os.environ.get("GROQ_KEYS", ""))
     raw = os.environ.get("EMAIL_ACCOUNTS", "").strip()
@@ -417,7 +511,6 @@ def bootstrap_from_env():
         break
 
 def _env_autostart_config():
-    # Once env, yoksa secrets.local.json targeting
     tg = {}
     for p in ("secrets.local.json", os.path.join(os.environ.get("DATA_DIR", "."), "secrets.local.json")):
         if os.path.exists(p):
@@ -437,12 +530,13 @@ def _env_autostart_config():
         "countries": _norm_list(pick("COUNTRIES", "countries", "")),
         "min_followers": int(pick("MIN_FOLLOWERS", "min_followers", 3000) or 3000),
         "max_followers": int(pick("MAX_FOLLOWERS", "max_followers", 80000) or 80000),
-        "target_count": int(pick("TARGET_COUNT", "target_count", 60) or 60),
+        "target_count": PER_COMBO_TARGET,
         "require_email": os.environ.get("REQUIRE_EMAIL", "1") == "1",
         "strict_country": os.environ.get("STRICT_COUNTRY", "1") == "1",
     }
 
 bootstrap_from_env()
+_start_monitor()
 if os.environ.get("AUTOSTART") == "1":
     cfg = _env_autostart_config()
     if cfg["hashtags"] and STATE["apify_tokens"]:
@@ -451,7 +545,6 @@ if os.environ.get("AUTOSTART") == "1":
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     host = os.environ.get("HOST", "127.0.0.1")
-    # debug/reloader varsayilan KAPALI (RCE riski + reloader auto dongusunu iki kez baslatir).
     debug = os.environ.get("FLASK_DEBUG") == "1"
-    print(f"\n CaptionAI Finder -> http://{host}:{port}   (kurulum: /setup  ·  checker: /checker)\n")
+    print(f"\n CaptionAI Finder -> http://{host}:{port}   (kurulum: /setup  \u00b7  checker: /checker)\n")
     app.run(debug=debug, host=host, port=port)
